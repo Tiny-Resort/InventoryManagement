@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx;
@@ -10,10 +11,10 @@ using UnityEngine;
 using Logger = BepInEx.Logging.Logger;
 
 namespace TR {
-    
+
     [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
-    public class ExportToChests : BaseUnityPlugin{
-        
+    public class ExportToChests : BaseUnityPlugin {
+
         public const string pluginGuid = "tinyresort.dinkum.AutoStackToChests";
         public const string pluginName = "Auto Stack to Chests";
         public const string pluginVersion = "0.5.0";
@@ -27,16 +28,14 @@ namespace TR {
         public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
         public static Dictionary<int, InventoryItem> allItems = new Dictionary<int, InventoryItem>();
         public static List<ChestPlaceable> knownChests = new List<ChestPlaceable>();
-        public static Dictionary<int, InventoryTotal> currentInventory = new Dictionary<int, InventoryTotal>();
         public static HouseDetails playerHouse;
         public static HouseDetails currentHouseDetails;
         public static Transform playerHouseTransform;
         public static bool isInside;
         public static Vector3 currentPosition;
 
-
         public static bool allItemsInitialized;
-        
+
         private void Awake() {
 
             StaticLogger = Logger;
@@ -64,7 +63,6 @@ namespace TR {
 
             Harmony harmony = new Harmony(pluginGuid);
 
-  
             MethodInfo updateRWTL = AccessTools.Method(typeof(RealWorldTimeLight), "Update");
             MethodInfo updateRWTLPrefix = AccessTools.Method(typeof(ExportToChests), "updateRWTLPrefix");
 
@@ -91,26 +89,30 @@ namespace TR {
             currentHouseDetails = __instance.insideHouseDetails;
             playerHouseTransform = __instance.playerHouseTransform;
             isInside = __instance.insidePlayerHouse;
-
         }
-        
+
         public static void Dbgl(string str = "") {
             if (isDebug.Value) { StaticLogger.LogInfo(str); }
         }
-        
+
+        private static void InitializeAllItems() {
+            allItemsInitialized = true;
+            foreach (var item in Inventory.inv.allItems) {
+                var id = item.getItemId();
+                allItems[id] = item;
+            }
+
+        }
+
         public static void RunSequence() {
             ParseAllItems();
             UpdateAllItems();
         }
-        
-        public static int GetChestItemCount(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info.quantity : 0;
 
-        public static ItemInfo GetChestItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
+        public static int GetItemCount(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info.quantity : 0;
 
-        public static int GetInventoryItemCount(int itemID) => currentInventory.TryGetValue(itemID, out var info) ? info.quantity : 0;
+        public static ItemInfo GetItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
 
-        public static InventoryTotal GetInventoryItem(int itemID) => currentInventory.TryGetValue(itemID, out var info) ? info : null;
-        
         public static void removeFromPlayerInventory(int itemID, int slotID, int amountRemaining) {
             Inventory.inv.invSlots[slotID].stack = amountRemaining;
             Inventory.inv.invSlots[slotID].updateSlotContentsAndRefresh(amountRemaining == 0 ? -1 : itemID, amountRemaining);
@@ -119,90 +121,54 @@ namespace TR {
         public static void UpdateAllItems() {
             for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
                 int invItemId = Inventory.inv.invSlots[i].itemNo;
-                int amountToRemove = Inventory.inv.invSlots[i].stack;
-                var info = GetInventoryItem(invItemId);
-                for (var d = 0; d < info.ItemInfo.Count; d++) {
-                    StackItemsInChests(info.ItemInfo[d]);
-                    removeFromPlayerInventory(invItemId, info.ItemInfo[d].slotID, 0);
-                }
-            }
-        }
+                if (invItemId != -1) {
+                    int amountToAdd = Inventory.inv.invSlots[i].stack;
+                    bool hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
+                    var info = GetItem(invItemId);
 
-        public static void StackItemsInChests(InventoryInfo inv) {
-          //  Debug.Log("Test if in stackItemsInChest");
-            int invItemID = inv.itemID;
-            int amount = inv.quantity;
-            int currentSlot = inv.slotID;
-           // Debug.Log("before getChestItem");
-
-            var chestInfo = GetChestItem(invItemID);
-            if (chestInfo != null) {
-                for (var d = 0; d < chestInfo.sources.Count; d++) {
-                    //    Debug.Log("Test if in stackItemsInChest chest loops");
-
-                    ContainerManager.manage.changeSlotInChest(
-                        chestInfo.sources[d].chest.xPos,
-                        chestInfo.sources[d].chest.yPos,
-                        chestInfo.sources[d].slotID,
-                        invItemID,
-                        chestInfo.sources[d].quantity + amount,
-                        chestInfo.sources[d].inPlayerHouse
-                    );
-                }
-            }
-        }
-        
-
-        public static void ParseAllItems() {
-
-            if (!allItemsInitialized) { InitializeAllItems(); }
-
-            // Recreate known chests and inventory and clear items
-            FindNearbyChests();
-            nearbyItems.Clear();
-            currentInventory.Clear();
-            
-            // Get all items in player inventory
-            for (var i = 0; i < Inventory.inv.invSlots.Length; i++) {
-                if (Inventory.inv.invSlots[i].itemNo != -1 && allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)) {
-                    AddItemToInventoryList(
-                        Inventory.inv.invSlots[i].itemNo, Inventory.inv.invSlots[i].stack,
-                        i, allItems[Inventory.inv.invSlots[i].itemNo].checkIfStackable()
-                    );
-                }
-                else if (!allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)) { Dbgl($"Failed Item: {Inventory.inv.invSlots[i].itemNo} |  {Inventory.inv.invSlots[i].stack}"); }
-            }
-
-            // Get all items in nearby chests
-            Debug.Log($"ChestInfo Size: {nearbyChests.Count}");
-            foreach (var ChestInfo in nearbyChests) {
-                for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
-                    if (ChestInfo.chest.itemIds[i] != -1 && allItems.ContainsKey(ChestInfo.chest.itemIds[i])) {
-                        AddItemToChestList(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, allItems[ChestInfo.chest.itemIds[i]].checkIfStackable(), ChestInfo.house, ChestInfo.chest);
+                    // Stops if we don't have the item stored in a chest
+                    if (info != null) { 
+                        for (var d = 0; d < info.sources.Count; d++) {
+                            int tmpFirstEmptySlot = checkForEmptySlot(info.sources[d].chest);
+                            int tmpSlotID = hasFuel && tmpFirstEmptySlot != 999 ? tmpFirstEmptySlot : info.sources[d].slotID;
+                                ContainerManager.manage.changeSlotInChest(
+                                    info.sources[d].chest.xPos,
+                                    info.sources[d].chest.yPos,
+                                    tmpSlotID,
+                                    invItemId,
+                                info.sources[d].quantity + amountToAdd,
+                                    info.sources[d].inPlayerHouse
+                                );
+                                removeFromPlayerInventory(invItemId, i, 0);
+                        }
                     }
                 }
             }
         }
 
-        // Adds all items in inventory to a Dictionary. 
-        public static void AddItemToInventoryList(int itemID, int quantity, int slotID, bool isStackable) {
-
-            if (!currentInventory.TryGetValue(itemID, out var info)) { info = new InventoryTotal(); }
-            InventoryInfo source = new InventoryInfo();
-            
-            if (!isStackable) {
-                source.fuel = quantity;
-                quantity = 1;
+        public static int checkForEmptySlot(Chest ChestInfo) {
+            for (var i = 0; i < ChestInfo.itemIds.Length; i++) {
+                if (ChestInfo.itemIds[i] == -1) { return i; }
             }
-            info.quantity += quantity; // Total Quantity in Inventory
-            source.quantity += quantity; // Quantity in slot
-            source.slotID = slotID;
-     
-            info.ItemInfo.Add(source);
-            currentInventory[itemID] = info;
+            return 999;
         }
 
-        public static void AddItemToChestList(int itemID, int quantity, int slotID, bool isStackable, HouseDetails isInHouse, Chest chest) {
+        public static void ParseAllItems() {
+            if (!allItemsInitialized) { InitializeAllItems(); }
+
+            // Recreate known chests and inventory and clear items
+            FindNearbyChests();
+            nearbyItems.Clear();
+
+            // Get all items in nearby chests
+            foreach (var ChestInfo in nearbyChests) {
+                for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
+                    if (ChestInfo.chest.itemIds[i] != -1 && allItems.ContainsKey(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, allItems[ChestInfo.chest.itemIds[i]].checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
+                }
+            }
+        }
+
+        public static void AddItem(int itemID, int quantity, int slotID, bool isStackable, HouseDetails isInHouse, Chest chest) {
 
             if (!nearbyItems.TryGetValue(itemID, out var info)) { info = new ItemInfo(); }
             ItemStack source = new ItemStack();
@@ -217,19 +183,12 @@ namespace TR {
             source.chest = chest;
             source.slotID = slotID;
             source.inPlayerHouse = isInHouse;
-       
+
             info.sources.Add(source);
-            Debug.Log($"Chest Inventory{chest} -- Slot ID: {slotID} | ItemID: {itemID} | Quantity: {source.quantity} | Chest X: {chest.xPos} | Chest Y: {chest.yPos}");
+
+            // Debug.Log($"Chest Inventory{chest} -- Slot ID: {slotID} | ItemID: {itemID} | Quantity: {source.quantity} | Chest X: {chest.xPos} | Chest Y: {chest.yPos}");
+
             nearbyItems[itemID] = info;
-        }
-
-        private static void InitializeAllItems() {
-            allItemsInitialized = true;
-            foreach (var item in Inventory.inv.allItems) {
-                var id = item.getItemId();
-                allItems[id] = item;
-            }
-
         }
 
         public static void FindNearbyChests() {
@@ -243,7 +202,7 @@ namespace TR {
             for (int i = 0; i < HouseManager.manage.allHouses.Count; i++) {
                 if (HouseManager.manage.allHouses[i].isThePlayersHouse) { playerHouse = HouseManager.manage.allHouses[i]; }
             }
-            
+
             Dbgl($"{currentPosition.x} {0} {currentPosition.z}");
             chestsOutside = Physics.OverlapBox(new Vector3(currentPosition.x, -7, currentPosition.z), new Vector3(radius.Value * 2, 40, radius.Value * 2));
             Dbgl($"{currentPosition.x} {-88} {currentPosition.z}");
@@ -291,16 +250,4 @@ namespace TR {
         public Chest chest;
     }
 
-    public class InventoryTotal {
-        public int quantity;
-        public List<InventoryInfo> ItemInfo = new List<InventoryInfo>();
-    }
-
-    public class InventoryInfo {
-        public bool isLocked;
-        public int slotID;
-        public int itemID;
-        public int quantity;
-        public int fuel;
-    }
 }
