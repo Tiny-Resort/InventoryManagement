@@ -2,13 +2,22 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Windows.Forms.VisualStyles;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Core.Logging.Interpolation;
 using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.Experimental.GlobalIllumination;
 using Logger = BepInEx.Logging.Logger;
+
+
+// TODO: Add the ability to send specific items to nearest chest by some key combination
+// TODO: Update lock to color the Hotbar
+// TODO: Update method to use .sav rather than config file
 
 namespace TR {
 
@@ -23,6 +32,8 @@ namespace TR {
         public static ConfigEntry<bool> isDebug;
         public static ConfigEntry<int> nexusID;
         public static ConfigEntry<int> radius;
+        public static ConfigEntry<bool> ignoreHotbar;
+        public static ConfigEntry<string> ignoreSpecifcSlots;
 
         public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
         public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
@@ -33,21 +44,39 @@ namespace TR {
         public static Transform playerHouseTransform;
         public static bool isInside;
         public static Vector3 currentPosition;
+        public static List<int> lockedSlots = new List<int>();
+        public static Color LockedSlotColor;
+        public static Color defaultColor;
+        public static bool checkedDefaultColor;
 
         public static bool allItemsInitialized;
 
         private void Awake() {
 
             StaticLogger = Logger;
-
             #region Configuration
 
             nexusID = Config.Bind<int>("General", "NexusID", 28, "Nexus mod ID for updates");
             radius = Config.Bind<int>("General", "Range", 30, "Increases the range it looks for storage containers by an approximate tile count.");
             isDebug = Config.Bind<bool>("General", "DebugMode", false, "Turns on debug mode. This makes it laggy when attempting to craft.");
-
+            ignoreHotbar = Config.Bind<bool>("General", "IgnoreHotbar", true, "Set to false to disable auto importing from the hotbar.");
+            ignoreSpecifcSlots = Config.Bind<string>("DO NOT EDIT", "IgnoreSpecificSlots","", "Set to false to disable auto importing from the hotbar.");
             #endregion
 
+            if (ignoreSpecifcSlots != null) {
+                string[] tmp = ignoreSpecifcSlots.Value.Split(',');
+                if (tmp.Length > 1) {
+                    for (var i = 0; i < tmp.Length; i++) {
+                        Debug.Log($"Split: {i}:{tmp[i]} | Length: {tmp.Length}");
+                        if (tmp[i] != "" || tmp[i] != " ") {
+                            int.TryParse(tmp[i], out int tmpInt);
+                            lockedSlots.Add(tmpInt);
+                        }
+                    }
+                }
+            }
+
+            LockedSlotColor = new Color(.5f, .5f,.5f,1f );
             #region Logging
 
             ManualLogSource logger = Logger;
@@ -69,8 +98,12 @@ namespace TR {
             MethodInfo update = AccessTools.Method(typeof(CharInteract), "Update");
             MethodInfo updatePrefix = AccessTools.Method(typeof(ExportToChests), "updatePrefix");
 
+            MethodInfo moveCursor = AccessTools.Method(typeof(Inventory), "moveCursor");
+            MethodInfo moveCursorPrefix = AccessTools.Method(typeof(ExportToChests), "moveCursorPrefix");
+            
             harmony.Patch(updateRWTL, new HarmonyMethod(updateRWTLPrefix));
             harmony.Patch(update, new HarmonyMethod(updatePrefix));
+            harmony.Patch(moveCursor, new HarmonyMethod(moveCursorPrefix));
 
             #endregion
 
@@ -79,6 +112,48 @@ namespace TR {
         [HarmonyPrefix]
         private static void updateRWTLPrefix(RealWorldTimeLight __instance) {
             if (Input.GetKeyDown(KeyCode.F6)) { RunSequence(); }
+        }
+        
+        public static void moveCursorPrefix(Inventory __instance) {
+            if (InputMaster.input.UISelect()) {
+                if (Input.GetKey(KeyCode.LeftAlt) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
+                    InventorySlot slot = __instance.cursorPress();
+                    Debug.Log($"{slot.transform.parent.gameObject.name}");
+                    if (!checkedDefaultColor) { defaultColor = slot.GetComponent<UnityEngine.UI.Image>().color;
+                        checkedDefaultColor = true;
+                    }
+                    if(slot != null) {
+                        if (slot.transform.parent.gameObject.name == "InventoryWindows") {
+                            var tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11;
+                            if (lockedSlots.Contains(tempCurrentIgnore)) {
+                                lockedSlots.Remove(tempCurrentIgnore);
+                                slot.GetComponent<UnityEngine.UI.Image>().color = defaultColor;
+                            }
+                            else {
+                                lockedSlots.Add(tempCurrentIgnore);
+                                slot.GetComponent<UnityEngine.UI.Image>().color = LockedSlotColor;
+                            }
+                        }
+                        if (slot.transform.parent.gameObject.name == "QuickSlotBar") {
+                            Debug.Log("Test 1");
+                            var tempCurrentIgnore = slot.transform.GetSiblingIndex();
+                            if (lockedSlots.Contains(tempCurrentIgnore)) {
+                                Debug.Log("Test 2");
+                                lockedSlots.Remove(tempCurrentIgnore);
+                                slot.GetComponent<UnityEngine.UI.Image>().color = defaultColor;
+                            }
+                            else {
+                                Debug.Log("Test 3");
+                                lockedSlots.Add(tempCurrentIgnore);
+                                slot.transform.GetComponent<UnityEngine.UI.Image>().color = LockedSlotColor;
+                            }
+                        }
+                    }
+                }
+                ignoreSpecifcSlots.Value = null;
+                foreach (var element in lockedSlots) { ignoreSpecifcSlots.Value = ignoreSpecifcSlots.Value + element + ","; }
+                ignoreSpecifcSlots.ConfigFile.Save();
+            }
         }
 
         [HarmonyPrefix]
@@ -94,7 +169,7 @@ namespace TR {
         public static void Dbgl(string str = "") {
             if (isDebug.Value) { StaticLogger.LogInfo(str); }
         }
-
+        
         private static void InitializeAllItems() {
             allItemsInitialized = true;
             foreach (var item in Inventory.inv.allItems) {
@@ -119,27 +194,31 @@ namespace TR {
         }
 
         public static void UpdateAllItems() {
-            for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
-                int invItemId = Inventory.inv.invSlots[i].itemNo;
-                if (invItemId != -1) {
-                    int amountToAdd = Inventory.inv.invSlots[i].stack;
-                    bool hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
-                    var info = GetItem(invItemId);
+            var startingPoint = ignoreHotbar.Value == true ? 11 : 0;
 
-                    // Stops if we don't have the item stored in a chest
-                    if (info != null) { 
-                        for (var d = 0; d < info.sources.Count; d++) {
-                            int tmpFirstEmptySlot = checkForEmptySlot(info.sources[d].chest);
-                            int tmpSlotID = hasFuel && tmpFirstEmptySlot != 999 ? tmpFirstEmptySlot : info.sources[d].slotID;
+            for (int i = startingPoint; i < Inventory.inv.invSlots.Length; i++) {
+                if (!lockedSlots.Contains(i)) {
+                    int invItemId = Inventory.inv.invSlots[i].itemNo;
+                    if (invItemId != -1) {
+                        Debug.Log($"Item Number: {invItemId} |  {i} | {Inventory.inv.invSlots[i].itemInSlot.itemName}");
+                        int amountToAdd = Inventory.inv.invSlots[i].stack;
+                        bool hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
+                        var info = GetItem(invItemId);
+                        // Stops if we don't have the item stored in a chest
+                        if (info != null) {
+                            for (var d = 0; d < info.sources.Count; d++) {
+                                int tmpFirstEmptySlot = checkForEmptySlot(info.sources[d].chest);
+                                int tmpSlotID = hasFuel && tmpFirstEmptySlot != 999 ? tmpFirstEmptySlot : info.sources[d].slotID;
                                 ContainerManager.manage.changeSlotInChest(
                                     info.sources[d].chest.xPos,
                                     info.sources[d].chest.yPos,
                                     tmpSlotID,
                                     invItemId,
-                                info.sources[d].quantity + amountToAdd,
+                                    info.sources[d].quantity + amountToAdd,
                                     info.sources[d].inPlayerHouse
                                 );
                                 removeFromPlayerInventory(invItemId, i, 0);
+                            }
                         }
                     }
                 }
