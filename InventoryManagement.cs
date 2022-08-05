@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -7,20 +8,23 @@ using BepInEx.Configuration;
 using BepInEx.Core.Logging.Interpolation;
 using BepInEx.Logging;
 using HarmonyLib;
+using TMPro;
 using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.InputSystem.HID;
 using UnityEngine.UI;
 
 // TODO: Add the ability to send specific items to nearest chest by some key combination
-// TODO: Update lock to color the Hotbar
 // TODO: Update method to use .sav rather than config file
+// TODO: Update key for sending all items into chests to be a config and set up a button to do it too.  
 
 namespace TR {
 
     [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
-    public class ExportToChests : BaseUnityPlugin {
+    public class InventoryManagement : BaseUnityPlugin {
 
-        public const string pluginGuid = "tinyresort.dinkum.AutoStackToChests";
-        public const string pluginName = "Auto Stack to Chests";
+        public const string pluginGuid = "tinyresort.dinkum.InventoryManagement";
+        public const string pluginName = "Inventory Management";
         public const string pluginVersion = "0.5.0";
         public static ManualLogSource StaticLogger;
 
@@ -42,21 +46,21 @@ namespace TR {
         public static List<int> lockedSlots = new List<int>();
         public static Color LockedSlotColor = new Color(.5f, .5f, .5f, 1f);
         public static Color defaultColor = Color.white;
-        public static bool ranInitialUpdate;
         public static int tempCurrentIgnore;
         public static int totalDeposited = 0;
         public static bool initalizedObjects = false;
+        public static bool ButtonIsReady = false;
 
         public static bool allItemsInitialized;
         public static Color checkColor;
-
+        public static GameObject GO;
         private void Awake() {
 
             StaticLogger = Logger;
 
             #region Configuration
 
-            nexusID = Config.Bind<int>("General", "NexusID", 28, "Nexus mod ID for updates");
+            nexusID = Config.Bind<int>("General", "NexusID", 50, "Nexus mod ID for updates");
             radius = Config.Bind<int>("General", "Range", 30, "Increases the range it looks for storage containers by an approximate tile count.");
             isDebug = Config.Bind<bool>("General", "DebugMode", false, "Turns on debug mode. This makes it laggy when attempting to craft.");
             ignoreHotbar = Config.Bind<bool>("General", "IgnoreHotbar", true, "Set to true to disable auto importing from the hotbar.");
@@ -99,26 +103,27 @@ namespace TR {
             Harmony harmony = new Harmony(pluginGuid);
 
             MethodInfo updateRWTL = AccessTools.Method(typeof(RealWorldTimeLight), "Update");
-            MethodInfo updateRWTLPrefix = AccessTools.Method(typeof(ExportToChests), "updateRWTLPrefix");
+            MethodInfo updateRWTLPrefix = AccessTools.Method(typeof(InventoryManagement), "updateRWTLPrefix");
 
             MethodInfo update = AccessTools.Method(typeof(CharInteract), "Update");
-            MethodInfo updatePrefix = AccessTools.Method(typeof(ExportToChests), "updatePrefix");
+            MethodInfo updatePrefix = AccessTools.Method(typeof(InventoryManagement), "updatePrefix");
 
             MethodInfo moveCursor = AccessTools.Method(typeof(Inventory), "moveCursor");
-            MethodInfo moveCursorPrefix = AccessTools.Method(typeof(ExportToChests), "moveCursorPrefix");
-
-            MethodInfo openAndCloseInv = AccessTools.Method(typeof(Inventory), "openAndCloseInv");
-            MethodInfo openAndCloseInvPostfix = AccessTools.Method(typeof(ExportToChests), "openAndCloseInvPostfix");
-
+            MethodInfo moveCursorPrefix = AccessTools.Method(typeof(InventoryManagement), "moveCursorPrefix");
+            MethodInfo openInv = AccessTools.Method(typeof(CurrencyWindows), "openInv");
+            MethodInfo openInvPostfix = AccessTools.Method(typeof(InventoryManagement), "openInvPostfix");
             harmony.Patch(updateRWTL, new HarmonyMethod(updateRWTLPrefix));
             harmony.Patch(update, new HarmonyMethod(updatePrefix));
             harmony.Patch(moveCursor, new HarmonyMethod(moveCursorPrefix));
-            harmony.Patch(openAndCloseInv, new HarmonyMethod(openAndCloseInvPostfix));
+            harmony.Patch(openInv, null,new HarmonyMethod(openInvPostfix));
 
             #endregion
 
         }
 
+        public static void Dbgl(string str = "") {
+            if (isDebug.Value) { StaticLogger.LogInfo(str); }
+        }
         // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
         private static void updateRWTLPrefix(RealWorldTimeLight __instance) {
@@ -127,27 +132,34 @@ namespace TR {
                 totalDeposited = 0;
             }
         }
-
-        public static void openAndCloseInvPostfix(Inventory __instance) {/*
-            if (!initalizedObjects) {
-                for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
-
-                    Debug.Log("TestTestTest");
-                    var GO = Instantiate(Inventory.inv.invSlots[i], Inventory.inv.invSlots[i].transform.parent);
-                    GO.transform.SetSiblingIndex(Inventory.inv.invSlots[i].transform.GetSiblingIndex());
-                    var Im = GO.GetComponent<Image>();
-                    Im.rectTransform.sizeDelta = GO.GetComponent<Image>().rectTransform.sizeDelta + new Vector2(1, 1);
-                    Im.color = LockedSlotColor;
-                    GO.gameObject.SetActive(true);
-                }
-                initalizedObjects = true;
-            }*/
-
-            Color tmpColor = __instance.invOpen ? LockedSlotColor : Color.white;
+        
+        public void LateUpdate() {
+            Color tmpColor = Inventory.inv.invOpen ? LockedSlotColor : Color.white;
             if (lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null) {
                 for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
                     if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = tmpColor; }
                 }
+            }
+        }
+        
+        [HarmonyPostfix]
+        public static void openInvPostfix() {
+            if (!initalizedObjects && ButtonIsReady) {
+                GO = Instantiate(Inventory.inv.walletSlot.transform.parent.gameObject, Inventory.inv.walletSlot.transform.parent.parent, true);
+                Destroy(GO.transform.GetChild(0).gameObject);
+                Destroy(GO.transform.GetChild(1).GetChild(2).gameObject);
+                var Im = GO.transform.GetChild(1).GetComponent<Image>();
+               // var rect = GO.GetComponent<RectTransform>();
+                Im.rectTransform.anchoredPosition += new Vector2(190, 0);
+                var textGO = GO.GetComponentsInChildren<TextMeshProUGUI>();
+                textGO[0].enableWordWrapping = false;
+                textGO[0].rectTransform.anchoredPosition += new Vector2(-18, 0);
+                textGO[0].text = "Sort to Chests";
+
+                var buttonGO = Im.gameObject.AddComponent<InvButton>();
+                Im.gameObject.AddComponent<GraphicRaycaster>();
+                buttonGO.onButtonPress.AddListener(RunSequence);
+                initalizedObjects = true;
             }
         }
 
@@ -159,7 +171,9 @@ namespace TR {
                     if (slot != null) {
                         if (slot.transform.parent.gameObject.name == "InventoryWindows") { tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11; }
                         else if (slot.transform.parent.gameObject.name == "QuickSlotBar") { tempCurrentIgnore = slot.transform.GetSiblingIndex(); }
-                        else { tempCurrentIgnore = -1; }
+                        else { Debug.Log($"Mouse Click On Button: {slot.transform.parent.gameObject.name}");
+                            tempCurrentIgnore = -1;
+                        }
                         if (tempCurrentIgnore != -1 && lockedSlots.Contains(tempCurrentIgnore)) {
                             lockedSlots.Remove(tempCurrentIgnore);
                             slot.slotBackgroundImage.color = defaultColor;
@@ -191,23 +205,19 @@ namespace TR {
             playerHouseTransform = __instance.playerHouseTransform;
             isInside = __instance.insidePlayerHouse;
         }
-
-        public static void Dbgl(string str = "") {
-            if (isDebug.Value) { StaticLogger.LogInfo(str); }
-        }
-
-        private static void InitializeAllItems() {
+  
+        public static void InitializeAllItems() {
             allItemsInitialized = true;
             foreach (var item in Inventory.inv.allItems) {
                 var id = item.getItemId();
                 allItems[id] = item;
             }
-
         }
 
         public static void RunSequence() {
             ParseAllItems();
             UpdateAllItems();
+            totalDeposited = 0;
         }
 
         public static int GetItemCount(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info.quantity : 0;
@@ -227,10 +237,8 @@ namespace TR {
                     int invItemId = Inventory.inv.invSlots[i].itemNo;
                     if (invItemId != -1) {
                         int amountToAdd = Inventory.inv.invSlots[i].stack;
-                        Debug.Log($"ItemID: {invItemId} | Amount to add: {amountToAdd}");
                         bool hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
                         bool isStackable = Inventory.inv.invSlots[i].itemInSlot.isStackable;
-                        Debug.Log($"Item ID: {invItemId} | Stackable: {isStackable}");
                         var info = GetItem(invItemId);
 
                         // Stops if we don't have the item stored in a chest
@@ -247,9 +255,6 @@ namespace TR {
                                     slotToUse = info.sources[d].slotID;
                                 }
                                 
-                                /*int tmpSlotID = (hasFuel || !isStackable) && tmpFirstEmptySlot != 999 ? tmpFirstEmptySlot : info.sources[d].slotID;
-                                int tmpSlotID2 = (hasFuel || !isStackable) && tmpFirstEmptySlot == 999 ? tmpFirstEmptySlot : tmpSlotID;
-                                int tmpSlotID3 = (isStackable && tmpFirstEmptySlot != 999) ? tmpFirstEmptySlot : tmpSlotID;*/
                                 if (slotToUse != 999) {
                                     ContainerManager.manage.changeSlotInChest(
                                         info.sources[d].chest.xPos,
@@ -261,19 +266,14 @@ namespace TR {
                                     );
                                     removeFromPlayerInventory(invItemId, i, 0);
                                     totalDeposited++;
+                                    break;
                                 }
-                                if (slotToUse == 998) {Debug.Log("SHouldnt hit this?");}
                                 hasFuel = false;
                                 isStackable = false;
-                                break;
                             }
-
                         }
-
                     }
-
                 }
-
             }
             NotificationManager.manage.createChatNotification($"{totalDeposited} item(s) have been deposited.");
             SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
@@ -288,11 +288,9 @@ namespace TR {
 
         public static void ParseAllItems() {
             if (!allItemsInitialized) { InitializeAllItems(); }
-
             // Recreate known chests and inventory and clear items
             FindNearbyChests();
             nearbyItems.Clear();
-
             // Get all items in nearby chests
             foreach (var ChestInfo in nearbyChests) {
                 for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
@@ -318,9 +316,6 @@ namespace TR {
             source.inPlayerHouse = isInHouse;
 
             info.sources.Add(source);
-
-            // Debug.Log($"Chest Inventory{chest} -- Slot ID: {slotID} | ItemID: {itemID} | Quantity: {source.quantity} | Chest X: {chest.xPos} | Chest Y: {chest.yPos}");
-
             nearbyItems[itemID] = info;
         }
 
