@@ -1,19 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Windows.Forms.VisualStyles;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Core.Logging.Interpolation;
 using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.Experimental.GlobalIllumination;
-using Logger = BepInEx.Logging.Logger;
-
+using UnityEngine.UI;
 
 // TODO: Add the ability to send specific items to nearest chest by some key combination
 // TODO: Update lock to color the Hotbar
@@ -45,38 +40,49 @@ namespace TR {
         public static bool isInside;
         public static Vector3 currentPosition;
         public static List<int> lockedSlots = new List<int>();
-        public static Color LockedSlotColor;
-        public static Color defaultColor;
-        public static bool checkedDefaultColor;
+        public static Color LockedSlotColor = new Color(.5f, .5f, .5f, 1f);
+        public static Color defaultColor = Color.white;
+        public static bool ranInitialUpdate;
+        public static int tempCurrentIgnore;
+        public static int totalDeposited = 0;
+        public static bool initalizedObjects = false;
 
         public static bool allItemsInitialized;
+        public static Color checkColor;
 
         private void Awake() {
 
             StaticLogger = Logger;
+
             #region Configuration
 
             nexusID = Config.Bind<int>("General", "NexusID", 28, "Nexus mod ID for updates");
             radius = Config.Bind<int>("General", "Range", 30, "Increases the range it looks for storage containers by an approximate tile count.");
             isDebug = Config.Bind<bool>("General", "DebugMode", false, "Turns on debug mode. This makes it laggy when attempting to craft.");
-            ignoreHotbar = Config.Bind<bool>("General", "IgnoreHotbar", true, "Set to false to disable auto importing from the hotbar.");
-            ignoreSpecifcSlots = Config.Bind<string>("DO NOT EDIT", "IgnoreSpecificSlots","", "Set to false to disable auto importing from the hotbar.");
+            ignoreHotbar = Config.Bind<bool>("General", "IgnoreHotbar", true, "Set to true to disable auto importing from the hotbar.");
+            ignoreSpecifcSlots = Config.Bind<string>("DO NOT EDIT", "IgnoreSpecificSlots", "", "DO NOT EDIT.");
+
             #endregion
 
+            #region Parse Config String to Int
+
+            // Convert this to use a .sav instead of using the base config settings
+            // BUG FIXED: Bug where it was always adding 0.
             if (ignoreSpecifcSlots != null) {
-                string[] tmp = ignoreSpecifcSlots.Value.Split(',');
-                if (tmp.Length > 1) {
-                    for (var i = 0; i < tmp.Length; i++) {
-                        Debug.Log($"Split: {i}:{tmp[i]} | Length: {tmp.Length}");
-                        if (tmp[i] != "" || tmp[i] != " ") {
-                            int.TryParse(tmp[i], out int tmpInt);
-                            lockedSlots.Add(tmpInt);
-                        }
-                    }
+                string[] tmp = ignoreSpecifcSlots.Value.Trim().Split(',');
+                for (var i = 0; i < tmp.Length - 1; i++) {
+                    int.TryParse(tmp[i], out int tmpInt);
+                    lockedSlots.Add(tmpInt);
+
+                    // Set color to default to locked/unlocked depending on config file. 
+
+                    // slot.GetComponent<Image>().color = LockedSlotColor;
                 }
             }
+            initalizedObjects = false;
 
-            LockedSlotColor = new Color(.5f, .5f,.5f,1f );
+            #endregion
+
             #region Logging
 
             ManualLogSource logger = Logger;
@@ -100,59 +106,79 @@ namespace TR {
 
             MethodInfo moveCursor = AccessTools.Method(typeof(Inventory), "moveCursor");
             MethodInfo moveCursorPrefix = AccessTools.Method(typeof(ExportToChests), "moveCursorPrefix");
-            
+
+            MethodInfo openAndCloseInv = AccessTools.Method(typeof(Inventory), "openAndCloseInv");
+            MethodInfo openAndCloseInvPostfix = AccessTools.Method(typeof(ExportToChests), "openAndCloseInvPostfix");
+
             harmony.Patch(updateRWTL, new HarmonyMethod(updateRWTLPrefix));
             harmony.Patch(update, new HarmonyMethod(updatePrefix));
             harmony.Patch(moveCursor, new HarmonyMethod(moveCursorPrefix));
+            harmony.Patch(openAndCloseInv, new HarmonyMethod(openAndCloseInvPostfix));
 
             #endregion
 
         }
 
+        // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
         private static void updateRWTLPrefix(RealWorldTimeLight __instance) {
-            if (Input.GetKeyDown(KeyCode.F6)) { RunSequence(); }
+            if (Input.GetKeyDown(KeyCode.F6)) {
+                RunSequence();
+                totalDeposited = 0;
+            }
         }
-        
+
+        public static void openAndCloseInvPostfix(Inventory __instance) {/*
+            if (!initalizedObjects) {
+                for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
+
+                    Debug.Log("TestTestTest");
+                    var GO = Instantiate(Inventory.inv.invSlots[i], Inventory.inv.invSlots[i].transform.parent);
+                    GO.transform.SetSiblingIndex(Inventory.inv.invSlots[i].transform.GetSiblingIndex());
+                    var Im = GO.GetComponent<Image>();
+                    Im.rectTransform.sizeDelta = GO.GetComponent<Image>().rectTransform.sizeDelta + new Vector2(1, 1);
+                    Im.color = LockedSlotColor;
+                    GO.gameObject.SetActive(true);
+                }
+                initalizedObjects = true;
+            }*/
+
+            Color tmpColor = __instance.invOpen ? LockedSlotColor : Color.white;
+            if (lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null) {
+                for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
+                    if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = tmpColor; }
+                }
+            }
+        }
+
         public static void moveCursorPrefix(Inventory __instance) {
             if (InputMaster.input.UISelect()) {
                 if (Input.GetKey(KeyCode.LeftAlt) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
-                    Debug.Log($"{slot.transform.parent.gameObject.name}");
-                    if (!checkedDefaultColor) { defaultColor = slot.GetComponent<UnityEngine.UI.Image>().color;
-                        checkedDefaultColor = true;
-                    }
-                    if(slot != null) {
-                        if (slot.transform.parent.gameObject.name == "InventoryWindows") {
-                            var tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11;
-                            if (lockedSlots.Contains(tempCurrentIgnore)) {
-                                lockedSlots.Remove(tempCurrentIgnore);
-                                slot.GetComponent<UnityEngine.UI.Image>().color = defaultColor;
-                            }
-                            else {
-                                lockedSlots.Add(tempCurrentIgnore);
-                                slot.GetComponent<UnityEngine.UI.Image>().color = LockedSlotColor;
-                            }
+
+                    if (slot != null) {
+                        if (slot.transform.parent.gameObject.name == "InventoryWindows") { tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11; }
+                        else if (slot.transform.parent.gameObject.name == "QuickSlotBar") { tempCurrentIgnore = slot.transform.GetSiblingIndex(); }
+                        else { tempCurrentIgnore = -1; }
+                        if (tempCurrentIgnore != -1 && lockedSlots.Contains(tempCurrentIgnore)) {
+                            lockedSlots.Remove(tempCurrentIgnore);
+                            slot.slotBackgroundImage.color = defaultColor;
                         }
-                        if (slot.transform.parent.gameObject.name == "QuickSlotBar") {
-                            Debug.Log("Test 1");
-                            var tempCurrentIgnore = slot.transform.GetSiblingIndex();
-                            if (lockedSlots.Contains(tempCurrentIgnore)) {
-                                Debug.Log("Test 2");
-                                lockedSlots.Remove(tempCurrentIgnore);
-                                slot.GetComponent<UnityEngine.UI.Image>().color = defaultColor;
-                            }
-                            else {
-                                Debug.Log("Test 3");
-                                lockedSlots.Add(tempCurrentIgnore);
-                                slot.transform.GetComponent<UnityEngine.UI.Image>().color = LockedSlotColor;
-                            }
+                        else if (tempCurrentIgnore != -1) {
+                            lockedSlots.Add(tempCurrentIgnore);
+                            Inventory.inv.invSlots[tempCurrentIgnore].slotBackgroundImage.color = LockedSlotColor;
                         }
                     }
                 }
                 ignoreSpecifcSlots.Value = null;
-                foreach (var element in lockedSlots) { ignoreSpecifcSlots.Value = ignoreSpecifcSlots.Value + element + ","; }
+                foreach (var element in lockedSlots) {
+                    var tempString = ignoreSpecifcSlots == null ? element + "," : ignoreSpecifcSlots.Value + element + ",";
+                    ignoreSpecifcSlots.Value = tempString;
+                }
                 ignoreSpecifcSlots.ConfigFile.Save();
+                for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
+                    if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = LockedSlotColor; }
+                }
             }
         }
 
@@ -169,7 +195,7 @@ namespace TR {
         public static void Dbgl(string str = "") {
             if (isDebug.Value) { StaticLogger.LogInfo(str); }
         }
-        
+
         private static void InitializeAllItems() {
             allItemsInitialized = true;
             foreach (var item in Inventory.inv.allItems) {
@@ -200,29 +226,57 @@ namespace TR {
                 if (!lockedSlots.Contains(i)) {
                     int invItemId = Inventory.inv.invSlots[i].itemNo;
                     if (invItemId != -1) {
-                        Debug.Log($"Item Number: {invItemId} |  {i} | {Inventory.inv.invSlots[i].itemInSlot.itemName}");
                         int amountToAdd = Inventory.inv.invSlots[i].stack;
+                        Debug.Log($"ItemID: {invItemId} | Amount to add: {amountToAdd}");
                         bool hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
+                        bool isStackable = Inventory.inv.invSlots[i].itemInSlot.isStackable;
+                        Debug.Log($"Item ID: {invItemId} | Stackable: {isStackable}");
                         var info = GetItem(invItemId);
+
                         // Stops if we don't have the item stored in a chest
                         if (info != null) {
                             for (var d = 0; d < info.sources.Count; d++) {
+
+                                int slotToUse = 998;
                                 int tmpFirstEmptySlot = checkForEmptySlot(info.sources[d].chest);
-                                int tmpSlotID = hasFuel && tmpFirstEmptySlot != 999 ? tmpFirstEmptySlot : info.sources[d].slotID;
-                                ContainerManager.manage.changeSlotInChest(
-                                    info.sources[d].chest.xPos,
-                                    info.sources[d].chest.yPos,
-                                    tmpSlotID,
-                                    invItemId,
-                                    info.sources[d].quantity + amountToAdd,
-                                    info.sources[d].inPlayerHouse
-                                );
-                                removeFromPlayerInventory(invItemId, i, 0);
+                                if ((hasFuel || !isStackable) && tmpFirstEmptySlot != 999) {
+                                    slotToUse = tmpFirstEmptySlot;
+                                } else if ((hasFuel || !isStackable) && tmpFirstEmptySlot == 999) {
+                                    slotToUse = tmpFirstEmptySlot;
+                                } else if (isStackable) {
+                                    slotToUse = info.sources[d].slotID;
+                                }
+                                
+                                /*int tmpSlotID = (hasFuel || !isStackable) && tmpFirstEmptySlot != 999 ? tmpFirstEmptySlot : info.sources[d].slotID;
+                                int tmpSlotID2 = (hasFuel || !isStackable) && tmpFirstEmptySlot == 999 ? tmpFirstEmptySlot : tmpSlotID;
+                                int tmpSlotID3 = (isStackable && tmpFirstEmptySlot != 999) ? tmpFirstEmptySlot : tmpSlotID;*/
+                                if (slotToUse != 999) {
+                                    ContainerManager.manage.changeSlotInChest(
+                                        info.sources[d].chest.xPos,
+                                        info.sources[d].chest.yPos,
+                                        slotToUse,
+                                        invItemId,
+                                        !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd,
+                                        info.sources[d].inPlayerHouse
+                                    );
+                                    removeFromPlayerInventory(invItemId, i, 0);
+                                    totalDeposited++;
+                                }
+                                if (slotToUse == 998) {Debug.Log("SHouldnt hit this?");}
+                                hasFuel = false;
+                                isStackable = false;
+                                break;
                             }
+
                         }
+
                     }
+
                 }
+
             }
+            NotificationManager.manage.createChatNotification($"{totalDeposited} item(s) have been deposited.");
+            SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
         }
 
         public static int checkForEmptySlot(Chest ChestInfo) {
