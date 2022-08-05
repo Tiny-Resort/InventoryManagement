@@ -19,17 +19,18 @@ namespace TR {
 
     public class SortItems {
 
-        public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
+        public static Dictionary<int, ItemInfo> itemsToSort = new Dictionary<int, ItemInfo>();
 
-        
-        
-        public static int GetItemCount(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info.quantity : 0;
+        public static ItemInfo GetItem(int itemID) => itemsToSort.TryGetValue(itemID, out var info) ? info : null;
 
-        public static ItemInfo GetItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
+        public static void SortInventory() {
+            ParseAllItems();
+
+        }
         
         public static void AddItem(int itemID, int quantity, int slotID, bool isStackable, HouseDetails isInHouse, Chest chest) {
 
-            if (!nearbyItems.TryGetValue(itemID, out var info)) { info = new ItemInfo(); }
+            if (!itemsToSort.TryGetValue(itemID, out var info)) { info = new ItemInfo(); }
             ItemStack source = new ItemStack();
 
             if (!isStackable) {
@@ -44,7 +45,7 @@ namespace TR {
             source.inPlayerHouse = isInHouse;
 
             info.sources.Add(source);
-            nearbyItems[itemID] = info;
+            itemsToSort[itemID] = info;
         }
         
         public static void ParseAllItems() {
@@ -59,11 +60,27 @@ namespace TR {
 
             // Get all items in nearby chests
             // If chest is open, add contents of chest to a list
-            for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
+            /*for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
                 if (ChestInfo.chest.itemIds[i] != -1 && allItems.ContainsKey(ChestInfo.chest.itemIds[i])) AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, allItems[ChestInfo.chest.itemIds[i]].checkIfStackable(), ChestInfo.house, ChestInfo.chest);
-            }
+            }#1#
         }
+
+        public class ItemInfo {
+            public int quantity;
+            public List<ItemStack> sources = new List<ItemStack>();
+        }
+
+        public class ItemStack {
+            public bool playerInventory;
+            public int slotID;
+            public int quantity;
+            public int fuel;
+            public HouseDetails inPlayerHouse;
+            public Chest chest;
+        }
+        
     }
 
 }
 */
+

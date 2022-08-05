@@ -17,7 +17,7 @@ using UnityEngine.UI;
 // TODO: Add the ability to send specific items to nearest chest by some key combination
 // TODO: Update method to use .sav rather than config file
 // TODO: Update key for sending all items into chests to be a config and set up a button to do it too.  
-
+// TODO: Add ability to sort items
 namespace TR {
 
     [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
