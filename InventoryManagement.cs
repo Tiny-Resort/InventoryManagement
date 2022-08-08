@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Xml.XmlConfiguration;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Core.Logging.Interpolation;
@@ -16,23 +17,27 @@ using UnityEngine.UI;
 
 // TODO: Add the ability to send specific items to nearest chest by some key combination
 // TODO: Update method to use .sav rather than config file
-// TODO: Update key for sending all items into chests to be a config and set up a button to do it too.  
-// TODO: Add ability to sort items
-namespace TR {
+// TODO: Add a highlight on new items obtianed since last opening inventory. Will need to remove the items if you sort to chests automatically without opening first
+// TODO: Add button to send all items to chests
+namespace TinyResort {
 
     [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
     public class InventoryManagement : BaseUnityPlugin {
 
+        public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.InventoryManagement";
         public const string pluginName = "Inventory Management";
-        public const string pluginVersion = "0.5.0";
+        public const string pluginVersion = "0.6.1";
         public static ManualLogSource StaticLogger;
 
-        public static ConfigEntry<bool> isDebug;
-        public static ConfigEntry<int> nexusID;
         public static ConfigEntry<int> radius;
         public static ConfigEntry<bool> ignoreHotbar;
         public static ConfigEntry<string> ignoreSpecifcSlots;
+        public static ConfigEntry<KeyCode> exportKeybind;
+        public static ConfigEntry<KeyCode> lockSlotKeybind;
+        public static ConfigEntry<string> sortingOrder;
+        public static ConfigEntry<KeyCode> sortKeybind;
+        public static ConfigEntry<bool> alwaysInventory;
 
         public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
         public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
@@ -50,90 +55,87 @@ namespace TR {
         public static int totalDeposited = 0;
         public static bool initalizedObjects = false;
         public static bool ButtonIsReady = false;
+        public static bool clientInServer;
+        
 
         public static bool allItemsInitialized;
         public static Color checkColor;
         public static GameObject GO;
+        
         private void Awake() {
 
-            StaticLogger = Logger;
-
+            Plugin = TRTools.Initialize(this, Logger, 50, pluginGuid, pluginName, pluginVersion);
             #region Configuration
 
-            nexusID = Config.Bind<int>("General", "NexusID", 50, "Nexus mod ID for updates");
             radius = Config.Bind<int>("General", "Range", 30, "Increases the range it looks for storage containers by an approximate tile count.");
-            isDebug = Config.Bind<bool>("General", "DebugMode", false, "Turns on debug mode. This makes it laggy when attempting to craft.");
             ignoreHotbar = Config.Bind<bool>("General", "IgnoreHotbar", true, "Set to true to disable auto importing from the hotbar.");
             ignoreSpecifcSlots = Config.Bind<string>("DO NOT EDIT", "IgnoreSpecificSlots", "", "DO NOT EDIT.");
-
+            exportKeybind = Config.Bind<KeyCode>("Keybinds", "SortToChestKeybind", KeyCode.KeypadDivide, "Unity KeyCode used for sending inventory items into storage chests.");
+            lockSlotKeybind = Config.Bind<KeyCode>("Keybinds", "LockSlot", KeyCode.LeftAlt, "Unity KeyCode used for locking inventory slots. Use this key in combination with the left mouse button to lock the slots.");
+            sortingOrder = Config.Bind<string>("SortingOrder","SortOrder", "relics,bugsorfish,clothes,vehicles,placeables,base,tools,food", "Order to sort inventory and chest items.");
+            sortKeybind = Config.Bind<KeyCode>("Keybinds", "SortInventoryOrChests", KeyCode.KeypadMultiply, "Unity KeyCode used for sorting player and chest inventories.");
+            alwaysInventory = Config.Bind<bool>("SortingOrder", "AlwaysSortPlayerInventory", false, "Set to true if you would like the keybind to sort player inventory and chests while a chest window is open. By default, it will only sort the chest.");
             #endregion
-
+            
             #region Parse Config String to Int
 
             // Convert this to use a .sav instead of using the base config settings
-            // BUG FIXED: Bug where it was always adding 0.
             if (ignoreSpecifcSlots != null) {
                 string[] tmp = ignoreSpecifcSlots.Value.Trim().Split(',');
                 for (var i = 0; i < tmp.Length - 1; i++) {
                     int.TryParse(tmp[i], out int tmpInt);
                     lockedSlots.Add(tmpInt);
-
-                    // Set color to default to locked/unlocked depending on config file. 
-
-                    // slot.GetComponent<Image>().color = LockedSlotColor;
                 }
             }
+            string[] tmpSort = sortingOrder.Value.Trim().ToLower().Split(',');
+            for (var i = 0; i < tmpSort.Length; i++) {
+                Plugin.LogToConsole($"tempSort List: {tmpSort[i]}");
+                SortItems.typeOrder[tmpSort[i]] = i; ;
+            }
+            foreach (var element in SortItems.typeOrder) {
+                Plugin.LogToConsole($"Key: {element.Key} | Value: {element.Value}");
+            }
+            
             initalizedObjects = false;
 
             #endregion
 
-            #region Logging
-
-            ManualLogSource logger = Logger;
-
-            bool flag;
-            BepInExInfoLogInterpolatedStringHandler handler = new BepInExInfoLogInterpolatedStringHandler(18, 1, out flag);
-            if (flag) { handler.AppendLiteral("Plugin " + pluginGuid + " (v" + pluginVersion + ") loaded!"); }
-            logger.LogInfo(handler);
-
-            #endregion
-
             #region Patching
-
-            Harmony harmony = new Harmony(pluginGuid);
-
-            MethodInfo updateRWTL = AccessTools.Method(typeof(RealWorldTimeLight), "Update");
-            MethodInfo updateRWTLPrefix = AccessTools.Method(typeof(InventoryManagement), "updateRWTLPrefix");
-
-            MethodInfo update = AccessTools.Method(typeof(CharInteract), "Update");
-            MethodInfo updatePrefix = AccessTools.Method(typeof(InventoryManagement), "updatePrefix");
-
-            MethodInfo moveCursor = AccessTools.Method(typeof(Inventory), "moveCursor");
-            MethodInfo moveCursorPrefix = AccessTools.Method(typeof(InventoryManagement), "moveCursorPrefix");
-            MethodInfo openInv = AccessTools.Method(typeof(CurrencyWindows), "openInv");
-            MethodInfo openInvPostfix = AccessTools.Method(typeof(InventoryManagement), "openInvPostfix");
-            harmony.Patch(updateRWTL, new HarmonyMethod(updateRWTLPrefix));
-            harmony.Patch(update, new HarmonyMethod(updatePrefix));
-            harmony.Patch(moveCursor, new HarmonyMethod(moveCursorPrefix));
-            harmony.Patch(openInv, null,new HarmonyMethod(openInvPostfix));
-
+            Plugin.QuickPatch(typeof(RealWorldTimeLight), "Update", typeof(InventoryManagement), "updateRWTLPrefix");
+            Plugin.QuickPatch(typeof(CharInteract), "Update", typeof(InventoryManagement), "updatePrefix");
+            Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(InventoryManagement), "moveCursorPrefix");
+            Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), "openInvPostfix");
+            Plugin.QuickPatch(typeof(ContainerManager), "openChestFromServer", typeof(SortItems), "openChestFromServerPostfix");
             #endregion
 
         }
 
-        public static void Dbgl(string str = "") {
-            if (isDebug.Value) { StaticLogger.LogInfo(str); }
+        public static bool disableMod() {
+            if (clientInServer) return true;
+            return false;
         }
         // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
         private static void updateRWTLPrefix(RealWorldTimeLight __instance) {
-            if (Input.GetKeyDown(KeyCode.F6)) {
-                RunSequence();
-                totalDeposited = 0;
+            if (!__instance.isServer)
+                clientInServer = true;
+            else { clientInServer = false; }
+
+            if (Input.GetKeyDown(exportKeybind.Value)) {
+                if (disableMod()) { TRTools.TopNotification("Inventory Management", "This mod is disabled for the client in mulitplayer worlds."); }
+                else if (RealWorldTimeLight.time.underGround) { TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines."); }
+                if (!disableMod() && !RealWorldTimeLight.time.underGround) {
+                    RunSequence();
+                    totalDeposited = 0;
+                } 
+            }
+            if (Input.GetKeyDown(sortKeybind.Value)) {
+                SortItems.SortInventory();
             }
         }
         
         public void LateUpdate() {
+            if (disableMod()) return;
             Color tmpColor = Inventory.inv.invOpen ? LockedSlotColor : Color.white;
             if (lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null) {
                 for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
@@ -144,6 +146,7 @@ namespace TR {
         
         [HarmonyPostfix]
         public static void openInvPostfix() {
+            if (disableMod()) return;
             if (!initalizedObjects && ButtonIsReady) {
                 GO = Instantiate(Inventory.inv.walletSlot.transform.parent.gameObject, Inventory.inv.walletSlot.transform.parent.parent, true);
                 Destroy(GO.transform.GetChild(0).gameObject);
@@ -164,8 +167,9 @@ namespace TR {
         }
 
         public static void moveCursorPrefix(Inventory __instance) {
+            if (disableMod()) return;
             if (InputMaster.input.UISelect()) {
-                if (Input.GetKey(KeyCode.LeftAlt) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
+                if (Input.GetKey(lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
 
                     if (slot != null) {
@@ -198,15 +202,17 @@ namespace TR {
 
         [HarmonyPrefix]
         public static void updatePrefix(CharInteract __instance) {
+            if (disableMod()) return;
             currentPosition = __instance.transform.position;
 
-            if (Input.GetKeyDown(KeyCode.F12)) Dbgl($"Current Position: ({currentPosition.x}, {currentPosition.y}, {currentPosition.z}) | Underground: {RealWorldTimeLight.time.underGround}");
+            if (Input.GetKeyDown(KeyCode.F12)) Plugin.LogToConsole($"Current Position: ({currentPosition.x}, {currentPosition.y}, {currentPosition.z}) | Underground: {RealWorldTimeLight.time.underGround}");
             currentHouseDetails = __instance.insideHouseDetails;
             playerHouseTransform = __instance.playerHouseTransform;
             isInside = __instance.insidePlayerHouse;
         }
   
         public static void InitializeAllItems() {
+            if (disableMod()) return;
             allItemsInitialized = true;
             foreach (var item in Inventory.inv.allItems) {
                 var id = item.getItemId();
@@ -215,6 +221,7 @@ namespace TR {
         }
 
         public static void RunSequence() {
+            if (disableMod()) return;
             ParseAllItems();
             UpdateAllItems();
             totalDeposited = 0;
@@ -225,11 +232,13 @@ namespace TR {
         public static ItemInfo GetItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
 
         public static void removeFromPlayerInventory(int itemID, int slotID, int amountRemaining) {
+            if (disableMod()) return;
             Inventory.inv.invSlots[slotID].stack = amountRemaining;
             Inventory.inv.invSlots[slotID].updateSlotContentsAndRefresh(amountRemaining == 0 ? -1 : itemID, amountRemaining);
         }
 
         public static void UpdateAllItems() {
+            if (disableMod()) return;
             var startingPoint = ignoreHotbar.Value == true ? 11 : 0;
 
             for (int i = startingPoint; i < Inventory.inv.invSlots.Length; i++) {
@@ -254,14 +263,14 @@ namespace TR {
                                 } else if (isStackable) {
                                     slotToUse = info.sources[d].slotID;
                                 }
-                                
+                                info.sources[d].quantity = !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd;
                                 if (slotToUse != 999) {
                                     ContainerManager.manage.changeSlotInChest(
                                         info.sources[d].chest.xPos,
                                         info.sources[d].chest.yPos,
                                         slotToUse,
                                         invItemId,
-                                        !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd,
+                                        info.sources[d].quantity,
                                         info.sources[d].inPlayerHouse
                                     );
                                     removeFromPlayerInventory(invItemId, i, 0);
@@ -287,6 +296,7 @@ namespace TR {
         }
 
         public static void ParseAllItems() {
+            if (disableMod()) return;
             if (!allItemsInitialized) { InitializeAllItems(); }
             // Recreate known chests and inventory and clear items
             FindNearbyChests();
@@ -300,7 +310,7 @@ namespace TR {
         }
 
         public static void AddItem(int itemID, int quantity, int slotID, bool isStackable, HouseDetails isInHouse, Chest chest) {
-
+            if (disableMod()) return;
             if (!nearbyItems.TryGetValue(itemID, out var info)) { info = new ItemInfo(); }
             ItemStack source = new ItemStack();
 
@@ -320,6 +330,7 @@ namespace TR {
         }
 
         public static void FindNearbyChests() {
+            if (disableMod()) return;
             nearbyChests.Clear();
 
             var chests = new List<(Collider hit, bool insideHouse)>();
@@ -331,9 +342,9 @@ namespace TR {
                 if (HouseManager.manage.allHouses[i].isThePlayersHouse) { playerHouse = HouseManager.manage.allHouses[i]; }
             }
 
-            Dbgl($"{currentPosition.x} {0} {currentPosition.z}");
+            Plugin.LogToConsole($"{currentPosition.x} {0} {currentPosition.z}");
             chestsOutside = Physics.OverlapBox(new Vector3(currentPosition.x, -7, currentPosition.z), new Vector3(radius.Value * 2, 40, radius.Value * 2));
-            Dbgl($"{currentPosition.x} {-88} {currentPosition.z}");
+            Plugin.LogToConsole($"{currentPosition.x} {-88} {currentPosition.z}");
             chestsInsideHouse = Physics.OverlapBox(new Vector3(currentPosition.x, -88, currentPosition.z), new Vector3(radius.Value * 2, 5, radius.Value * 2));
 
             for (var i = 0; i < chestsInsideHouse.Length; i++) { chests.Add((chestsInsideHouse[i], true)); }
