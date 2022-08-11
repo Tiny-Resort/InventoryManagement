@@ -27,7 +27,7 @@ namespace TinyResort {
         public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.InventoryManagement";
         public const string pluginName = "Inventory Management";
-        public const string pluginVersion = "0.6.1";
+        public const string pluginVersion = "0.6.5";
         public static ManualLogSource StaticLogger;
 
         public static ConfigEntry<int> radius;
@@ -105,9 +105,7 @@ namespace TinyResort {
             Plugin.QuickPatch(typeof(CharInteract), "Update", typeof(InventoryManagement), "updatePrefix");
             Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(InventoryManagement), "moveCursorPrefix");
             Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), "openInvPostfix");
-            Plugin.QuickPatch(typeof(ContainerManager), "openChestFromServer", typeof(SortItems), "openChestFromServerPostfix");
             #endregion
-
         }
 
         public static bool disableMod() {
@@ -135,7 +133,6 @@ namespace TinyResort {
         }
         
         public void LateUpdate() {
-            if (disableMod()) return;
             Color tmpColor = Inventory.inv.invOpen ? LockedSlotColor : Color.white;
             if (lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null) {
                 for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
@@ -167,7 +164,6 @@ namespace TinyResort {
         }
 
         public static void moveCursorPrefix(Inventory __instance) {
-            if (disableMod()) return;
             if (InputMaster.input.UISelect()) {
                 if (Input.GetKey(lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
@@ -212,7 +208,6 @@ namespace TinyResort {
         }
   
         public static void InitializeAllItems() {
-            if (disableMod()) return;
             allItemsInitialized = true;
             foreach (var item in Inventory.inv.allItems) {
                 var id = item.getItemId();

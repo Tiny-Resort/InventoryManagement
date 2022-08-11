@@ -26,6 +26,7 @@ namespace TinyResort {
         public static int currentChestX;
         public static int currentChestY;
         public static HouseDetails currentChestHouseDetails;
+        public static Chest currentChest;
 
         public static void SortInventory() {
             
@@ -56,15 +57,23 @@ namespace TinyResort {
 
             #region ChestSort
 
-            if (InventoryManagement.disableMod()) return;
+           // if (InventoryManagement.disableMod()) return;
             if (ChestWindow.chests.chestWindowOpen) {
                 chestToSort = chestToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
                 for (int i = 0; i < chestToSort.Count; i++) {
-                    if (chestToSort[i].hasFuel) { ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].fuel, currentChestHouseDetails); }
-                    else if (!chestToSort[i].hasFuel) { ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].quantity, currentChestHouseDetails); }
+                    if (chestToSort[i].hasFuel) {
+                        if (InventoryManagement.clientInServer) {
+                            NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].fuel);
+                        } else ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].fuel, currentChestHouseDetails);
+                    }
+                    else if (!chestToSort[i].hasFuel) {
+                        if (InventoryManagement.clientInServer) { NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].quantity); }
+                        else ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].quantity, currentChestHouseDetails);
+                    }
                     if (chestToSort.Count - 1 == i && i != 23) {
                         for (int j = i + 1; j < 24; j++) {
-                            ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, j, -1, 0, currentChestHouseDetails);
+                            if (InventoryManagement.clientInServer) { NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, j, -1, 0); }
+                            else ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, j, -1, 0, currentChestHouseDetails);
                         }
                     }
                 }
@@ -231,8 +240,8 @@ namespace TinyResort {
 
         public static void AddChestItem(int itemID, int quantity, bool isStackable, bool hasFuel, HouseDetails isInHouse, int value) {
             if (chestToSort.Any(i => i.itemID == itemID) && Inventory.inv.allItems[itemID].checkIfStackable()) {
-                var tmpInventoryItem = inventoryToSort.Find(i => i.itemID == itemID);
-                tmpInventoryItem.quantity += quantity;
+                var tempChestItem = chestToSort.Find(i => i.itemID == itemID);
+                tempChestItem.quantity += quantity;
             }
             else {
                 var tempItem = new ChestItems();
@@ -252,22 +261,15 @@ namespace TinyResort {
                 chestToSort.Add(tempItem);
             }
         }
-
-        [HarmonyPostfix]
-        public static void openChestFromServerPostfix(ContainerManager __instance, int xPos, int yPos, HouseDetails inside) {
-            InventoryManagement.Plugin.LogToConsole("Test");
-            currentChestX = xPos;
-            currentChestY = yPos;
-            currentChestHouseDetails = inside;
-        }
-
+        
         public static void ParseAllItems() {
             if (!InventoryManagement.allItemsInitialized) { InventoryManagement.InitializeAllItems(); }
             inventoryToSort.Clear();
             chestToSort.Clear();
-            //int itemID, int quantity, int fuel, bool isStackable
-            // If inventory is open add contents to a list
+            currentChest = null;
+
             for (var i = 11; i < Inventory.inv.invSlots.Length; i++) {
+                InventoryManagement.Plugin.LogToConsole($"Locked: {InventoryManagement.lockedSlots.Contains(i)} | -1:{Inventory.inv.invSlots[i].itemNo} | AllItems: {InventoryManagement.allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)}");
                 if (!InventoryManagement.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && InventoryManagement.allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)) {
                     AddInventoryItem(Inventory.inv.invSlots[i].itemNo, Inventory.inv.invSlots[i].stack, InventoryManagement.allItems[Inventory.inv.invSlots[i].itemNo].checkIfStackable(), Inventory.inv.allItems[Inventory.inv.invSlots[i].itemNo].hasFuel, Inventory.inv.allItems[Inventory.inv.invSlots[i].itemNo].value);
                     InventoryManagement.Plugin.LogToConsole($"Icon Name: {Inventory.inv.invSlots[i].itemInSlot.itemPrefab.name} | Item ID: {Inventory.inv.invSlots[i].itemNo} | Stack Size/Fuel: {Inventory.inv.invSlots[i].stack} | Is Stackable?:  {InventoryManagement.allItems[Inventory.inv.invSlots[i].itemNo].checkIfStackable()} | Item Type: {getItemType(Inventory.inv.invSlots[i].itemNo)}");
@@ -276,10 +278,21 @@ namespace TinyResort {
             }
             
             if (ChestWindow.chests.chestWindowOpen) {
-                Chest currentChest = ContainerManager.manage.getChestForWindow(currentChestX, currentChestY, currentChestHouseDetails);
-                for (var i = 0; i < currentChest.itemIds.Length; i++) {
-                    if (currentChest.itemIds[i] != -1 && InventoryManagement.allItems.ContainsKey(currentChest.itemIds[i])) {
-                        AddChestItem(currentChest.itemIds[i], currentChest.itemStacks[i], InventoryManagement.allItems[currentChest.itemIds[i]].checkIfStackable(), Inventory.inv.allItems[currentChest.itemIds[i]].hasFuel, currentChestHouseDetails, InventoryManagement.allItems[currentChest.itemIds[i]].value);
+                currentChestHouseDetails = NetworkMapSharer.share.localChar.myInteract.insideHouseDetails == null ? null : NetworkMapSharer.share.localChar.myInteract.insideHouseDetails;
+                for (int i = 0; i < ContainerManager.manage.activeChests.Count; i++) {
+                    if (NetworkMapSharer.share.localChar.myInteract.selectedTile.x == ContainerManager.manage.activeChests[i].xPos
+                     && NetworkMapSharer.share.localChar.myInteract.selectedTile.y == ContainerManager.manage.activeChests[i].yPos) {
+                        currentChest = ContainerManager.manage.activeChests[i];
+                        currentChestX = ContainerManager.manage.activeChests[i].xPos;
+                        currentChestY = ContainerManager.manage.activeChests[i].yPos;
+                    }
+                }
+                if (currentChest != null) {
+                    for (var i = 0; i < currentChest.itemIds.Length; i++) {
+                        if (currentChest.itemIds[i] != -1 && InventoryManagement.allItems.ContainsKey(currentChest.itemIds[i])) {
+                            InventoryManagement.Plugin.LogToConsole($"{currentChest.itemIds[i]}");
+                            AddChestItem(currentChest.itemIds[i], currentChest.itemStacks[i], InventoryManagement.allItems[currentChest.itemIds[i]].checkIfStackable(), Inventory.inv.allItems[currentChest.itemIds[i]].hasFuel, currentChestHouseDetails, InventoryManagement.allItems[currentChest.itemIds[i]].value);
+                        }
                     }
                 }
             }
