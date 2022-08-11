@@ -267,7 +267,7 @@ namespace TinyResort {
             inventoryToSort.Clear();
             chestToSort.Clear();
             currentChest = null;
-
+            
             for (var i = 11; i < Inventory.inv.invSlots.Length; i++) {
                 InventoryManagement.Plugin.LogToConsole($"Locked: {InventoryManagement.lockedSlots.Contains(i)} | -1:{Inventory.inv.invSlots[i].itemNo} | AllItems: {InventoryManagement.allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)}");
                 if (!InventoryManagement.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && InventoryManagement.allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)) {
@@ -285,6 +285,7 @@ namespace TinyResort {
                         currentChest = ContainerManager.manage.activeChests[i];
                         currentChestX = ContainerManager.manage.activeChests[i].xPos;
                         currentChestY = ContainerManager.manage.activeChests[i].yPos;
+                        break;
                     }
                 }
                 if (currentChest != null) {
