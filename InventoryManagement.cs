@@ -27,7 +27,7 @@ namespace TinyResort {
         public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.InventoryManagement";
         public const string pluginName = "Inventory Management";
-        public const string pluginVersion = "0.6.5";
+        public const string pluginVersion = "0.7.0";
         public static ManualLogSource StaticLogger;
 
         public static ConfigEntry<int> radius;
@@ -38,6 +38,12 @@ namespace TinyResort {
         public static ConfigEntry<string> sortingOrder;
         public static ConfigEntry<KeyCode> sortKeybind;
         public static ConfigEntry<bool> alwaysInventory;
+        public static ConfigEntry<float> warnPercentage;
+        public static ConfigEntry<float> swapPercentage;
+        public static ConfigEntry<bool> doSwapTools;
+        public static ConfigEntry<bool> showNotifications;
+        public static ConfigEntry<bool> useSimilarTools;
+
 
         public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
         public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
@@ -72,9 +78,17 @@ namespace TinyResort {
             ignoreSpecifcSlots = Config.Bind<string>("DO NOT EDIT", "IgnoreSpecificSlots", "", "DO NOT EDIT.");
             exportKeybind = Config.Bind<KeyCode>("Keybinds", "SortToChestKeybind", KeyCode.KeypadDivide, "Unity KeyCode used for sending inventory items into storage chests.");
             lockSlotKeybind = Config.Bind<KeyCode>("Keybinds", "LockSlot", KeyCode.LeftAlt, "Unity KeyCode used for locking inventory slots. Use this key in combination with the left mouse button to lock the slots.");
+            
             sortingOrder = Config.Bind<string>("SortingOrder","SortOrder", "relics,bugsorfish,clothes,vehicles,placeables,base,tools,food", "Order to sort inventory and chest items.");
             sortKeybind = Config.Bind<KeyCode>("Keybinds", "SortInventoryOrChests", KeyCode.KeypadMultiply, "Unity KeyCode used for sorting player and chest inventories.");
             alwaysInventory = Config.Bind<bool>("SortingOrder", "AlwaysSortPlayerInventory", false, "Set to true if you would like the keybind to sort player inventory and chests while a chest window is open. By default, it will only sort the chest.");
+           
+            warnPercentage = Config.Bind<float>("Tools", "WarnPercentage", 5, "Set the percentage of remaining durability for the notification to warn you.");
+            swapPercentage = Config.Bind<float>("Tools", "SwapPercentage", 2, "Set the percentage of remaining durability you want it to automatically swap tools.");
+            doSwapTools = Config.Bind<bool>("Tools", "SwapTools", true, "Set to false if you want to disable the automatic swapping of tools.");
+            showNotifications = Config.Bind<bool>("Tools", "ShowNotifications", true, "Set to false if you want to disable notifications about tools breaking at the specificed percentage.");
+            useSimilarTools = Config.Bind<bool>("Tools", "UseSimilarTools", true, "Set to false if you want to disable swapping to similar tools (i.e swapping from Basic Axe to Copper Axe).");
+
             #endregion
             
             #region Parse Config String to Int
@@ -105,8 +119,14 @@ namespace TinyResort {
             Plugin.QuickPatch(typeof(CharInteract), "Update", typeof(InventoryManagement), "updatePrefix");
             Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(InventoryManagement), "moveCursorPrefix");
             Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), "openInvPostfix");
+
+            
+            Plugin.QuickPatch(typeof(Inventory), "useItemWithFuel", typeof(Tools), "useItemWithFuelPatch");
+            Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
             #endregion
         }
+
+        
 
         public static bool disableMod() {
             if (clientInServer) return true;
@@ -162,6 +182,7 @@ namespace TinyResort {
                 initalizedObjects = true;
             }
         }
+
 
         public static void moveCursorPrefix(Inventory __instance) {
             if (InputMaster.input.UISelect()) {
