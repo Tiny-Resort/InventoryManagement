@@ -62,7 +62,7 @@ namespace TinyResort {
         public static bool initalizedObjects = false;
         public static bool ButtonIsReady = false;
         public static bool clientInServer;
-        
+        public static bool checkIfLocking;
 
         public static bool allItemsInitialized;
         public static Color checkColor;
@@ -184,7 +184,7 @@ namespace TinyResort {
         }
 
 
-        public static void moveCursorPrefix(Inventory __instance) {
+        public static bool moveCursorPrefix(Inventory __instance) {
             if (InputMaster.input.UISelect()) {
                 if (Input.GetKey(lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
@@ -204,6 +204,7 @@ namespace TinyResort {
                             Inventory.inv.invSlots[tempCurrentIgnore].slotBackgroundImage.color = LockedSlotColor;
                         }
                     }
+                    checkIfLocking = true;
                 }
                 ignoreSpecifcSlots.Value = null;
                 foreach (var element in lockedSlots) {
@@ -214,7 +215,10 @@ namespace TinyResort {
                 for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
                     if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = LockedSlotColor; }
                 }
+                if (checkIfLocking) {return false;}
             }
+            checkIfLocking = false;
+            return true;
         }
 
         [HarmonyPrefix]
