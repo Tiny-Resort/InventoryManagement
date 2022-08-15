@@ -58,7 +58,7 @@ namespace TinyResort {
             #region ChestSort
 
            // if (InventoryManagement.disableMod()) return;
-            if (ChestWindow.chests.chestWindowOpen) {
+            if (ChestWindow.chests.chestWindowOpen && !InventoryManagement.modDisabled) {
                 chestToSort = chestToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
                 for (int i = 0; i < chestToSort.Count; i++) {
                     if (chestToSort[i].hasFuel) {
@@ -79,6 +79,7 @@ namespace TinyResort {
                 }
                 NotificationManager.manage.createChatNotification($"The chest's inventory has been sorted.");
             }
+            if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines."); }
             SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
 
             #endregion
@@ -263,20 +264,16 @@ namespace TinyResort {
         }
         
         public static void ParseAllItems() {
-            if (!InventoryManagement.allItemsInitialized) { InventoryManagement.InitializeAllItems(); }
             inventoryToSort.Clear();
             chestToSort.Clear();
             currentChest = null;
             for (var i = 11; i < Inventory.inv.invSlots.Length; i++) {
-                InventoryManagement.Plugin.LogToConsole($"Locked: {InventoryManagement.lockedSlots.Contains(i)} | -1:{Inventory.inv.invSlots[i].itemNo} | AllItems: {InventoryManagement.allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)}");
-                if (!InventoryManagement.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && InventoryManagement.allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)) {
-                    AddInventoryItem(Inventory.inv.invSlots[i].itemNo, Inventory.inv.invSlots[i].stack, InventoryManagement.allItems[Inventory.inv.invSlots[i].itemNo].checkIfStackable(), Inventory.inv.allItems[Inventory.inv.invSlots[i].itemNo].hasFuel, Inventory.inv.allItems[Inventory.inv.invSlots[i].itemNo].value);
-                    InventoryManagement.Plugin.LogToConsole($"Icon Name: {Inventory.inv.invSlots[i].itemInSlot.itemPrefab.name} | Item ID: {Inventory.inv.invSlots[i].itemNo} | Stack Size/Fuel: {Inventory.inv.invSlots[i].stack} | Is Stackable?:  {InventoryManagement.allItems[Inventory.inv.invSlots[i].itemNo].checkIfStackable()} | Item Type: {getItemType(Inventory.inv.invSlots[i].itemNo)}");
+                if (!InventoryManagement.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && TRItems.DoesItemExist(Inventory.inv.invSlots[i].itemNo)) {
+                    AddInventoryItem(Inventory.inv.invSlots[i].itemNo, Inventory.inv.invSlots[i].stack, TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).checkIfStackable(), TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).hasFuel, TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).value);
                 }
-                else if (!InventoryManagement.allItems.ContainsKey(Inventory.inv.invSlots[i].itemNo)) { InventoryManagement.Plugin.LogToConsole($"Failed Item: {Inventory.inv.invSlots[i].itemNo} |  {Inventory.inv.invSlots[i].stack}"); }
             }
             
-            if (ChestWindow.chests.chestWindowOpen) {
+            if (ChestWindow.chests.chestWindowOpen && !InventoryManagement.modDisabled) {
                 currentChestHouseDetails = NetworkMapSharer.share.localChar.myInteract.insideHouseDetails == null ? null : NetworkMapSharer.share.localChar.myInteract.insideHouseDetails;
                 for (int i = 0; i < ContainerManager.manage.activeChests.Count; i++) {
                     if (NetworkMapSharer.share.localChar.myInteract.selectedTile.x == ContainerManager.manage.activeChests[i].xPos
@@ -289,9 +286,9 @@ namespace TinyResort {
                 }
                 if (currentChest != null) {
                     for (var i = 0; i < currentChest.itemIds.Length; i++) {
-                        if (currentChest.itemIds[i] != -1 && InventoryManagement.allItems.ContainsKey(currentChest.itemIds[i])) {
+                        if (currentChest.itemIds[i] != -1 && TRItems.DoesItemExist(currentChest.itemIds[i])) {
                             InventoryManagement.Plugin.LogToConsole($"{currentChest.itemIds[i]}");
-                            AddChestItem(currentChest.itemIds[i], currentChest.itemStacks[i], InventoryManagement.allItems[currentChest.itemIds[i]].checkIfStackable(), Inventory.inv.allItems[currentChest.itemIds[i]].hasFuel, currentChestHouseDetails, InventoryManagement.allItems[currentChest.itemIds[i]].value);
+                            AddChestItem(currentChest.itemIds[i], currentChest.itemStacks[i], TRItems.GetItemDetails(currentChest.itemIds[i]).checkIfStackable(), TRItems.GetItemDetails(currentChest.itemIds[i]).hasFuel, currentChestHouseDetails, TRItems.GetItemDetails(currentChest.itemIds[i]).value);
                         }
                     }
                 }

@@ -1,22 +1,9 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Media;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using BepInEx;
-using BepInEx.Configuration;
-using BepInEx.Core.Logging.Interpolation;
-using BepInEx.Logging;
 using HarmonyLib;
-using TMPro;
-using UnityEngine;
-using UnityEngine.Events;
-using UnityEngine.InputSystem.HID;
-using UnityEngine.UI;
 
 namespace TinyResort {
+
     public class Tools {
 
         public static int currentFuel;
@@ -30,22 +17,21 @@ namespace TinyResort {
 
         [HarmonyPrefix]
         public static void useItemWithFuelPatch(Inventory __instance) {
+      
             currentInventory = __instance;
 
             currentFuel = __instance.invSlots[__instance.selectedSlot].stack;
             maxFuel = __instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].fuelMax;
             nextFuel = __instance.invSlots[__instance.selectedSlot].stack - __instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].fuelOnUse;
             percentRemaining = (float)nextFuel / maxFuel * 100f;
-            InventoryManagement.Plugin.LogToConsole($"Current Fuel: {currentFuel} | Next Fuel: {nextFuel} | Max Fuel: {maxFuel} | Percent Remaining: {percentRemaining}");
 
             if (percentRemaining <= InventoryManagement.warnPercentage.Value && !warnedPercent && InventoryManagement.showNotifications.Value) {
-                TRTools.TopNotification($" Test: {__instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].itemName}", $"Durability is at {percentRemaining}");
-
+                TRTools.TopNotification($"{__instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].itemName}", $"Durability is at {percentRemaining}%");
                 ASound WarnTools = StatusManager.manage.lowHealthSound;
                 WarnTools.volume = WarnTools.volume + 0.2f;
                 SoundManager.manage.play2DSound(WarnTools);
-           
-                for (int i = 0; i < SoundManager.manage.my2DAudios.Length; i++) {InventoryManagement.Plugin.LogToConsole($"Sound: {SoundManager.manage.my2DAudios[i].name}"); }
+
+                for (int i = 0; i < SoundManager.manage.my2DAudios.Length; i++) { InventoryManagement.Plugin.LogToConsole($"Sound: {SoundManager.manage.my2DAudios[i].name}"); }
                 warnedPercent = true;
             }
 
@@ -85,16 +71,16 @@ namespace TinyResort {
 
         [HarmonyPrefix]
         public static void equipNewItemPrefix() {
-            // Bugs out with shovel due to shovel with dirt being a new equip...
-            warnedPercent = false;
-            
+            if (currentInventory != null) {
+                if (currentInventory.invSlots[currentInventory.selectedSlot].stack > nextFuel) warnedPercent = false;
+            }
         }
 
         public class InventoryItems {
-            public int itemID;
-            public int slotID;
             public int fuel;
             public bool hasFuel;
+            public int itemID;
+            public int slotID;
         }
     }
 

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -30,6 +31,11 @@ namespace TinyResort {
         public const string pluginVersion = "0.7.0";
         public static ManualLogSource StaticLogger;
 
+        private static InventoryManagement instance;
+        
+        public delegate void ParsingEvent();
+        public static ParsingEvent OnFinishedParsing;
+        
         public static ConfigEntry<int> radius;
         public static ConfigEntry<bool> ignoreHotbar;
         public static ConfigEntry<string> ignoreSpecifcSlots;
@@ -44,10 +50,10 @@ namespace TinyResort {
         public static ConfigEntry<bool> showNotifications;
         public static ConfigEntry<bool> useSimilarTools;
 
+        public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
+        private static Dictionary<(int xPos, int yPos), HouseDetails> unconfirmedChests = new Dictionary<(int xPos, int yPos), HouseDetails>();
 
         public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
-        public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
-        public static Dictionary<int, InventoryItem> allItems = new Dictionary<int, InventoryItem>();
         public static List<ChestPlaceable> knownChests = new List<ChestPlaceable>();
         public static HouseDetails playerHouse;
         public static HouseDetails currentHouseDetails;
@@ -64,11 +70,12 @@ namespace TinyResort {
         public static bool clientInServer;
         public static bool checkIfLocking;
 
-        public static bool allItemsInitialized;
+        public static Vector3 playerPosition;
         public static Color checkColor;
         public static GameObject GO;
-        
-        private void Awake() {
+
+        public void Awake() {
+            instance = this;
 
             Plugin = TRTools.Initialize(this, Logger, 50, pluginGuid, pluginName, pluginVersion);
             #region Configuration
@@ -116,36 +123,27 @@ namespace TinyResort {
 
             #region Patching
             Plugin.QuickPatch(typeof(RealWorldTimeLight), "Update", typeof(InventoryManagement), "updateRWTLPrefix");
-            Plugin.QuickPatch(typeof(CharInteract), "Update", typeof(InventoryManagement), "updatePrefix");
             Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(InventoryManagement), "moveCursorPrefix");
-            Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), "openInvPostfix");
+            Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement),null, "openInvPostfix");
 
-            
             Plugin.QuickPatch(typeof(Inventory), "useItemWithFuel", typeof(Tools), "useItemWithFuelPatch");
             Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
             #endregion
         }
 
-        
 
-        public static bool disableMod() {
-            if (clientInServer) return true;
-            return false;
-        }
+        public static bool modDisabled => RealWorldTimeLight.time.underGround;
+
         // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
-        private static void updateRWTLPrefix(RealWorldTimeLight __instance) {
-            if (!__instance.isServer)
-                clientInServer = true;
-            else { clientInServer = false; }
-
+        public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
+            clientInServer = !__instance.isServer;
+            
             if (Input.GetKeyDown(exportKeybind.Value)) {
-                if (disableMod()) { TRTools.TopNotification("Inventory Management", "This mod is disabled for the client in mulitplayer worlds."); }
-                else if (RealWorldTimeLight.time.underGround) { TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines."); }
-                if (!disableMod() && !RealWorldTimeLight.time.underGround) {
+                if (!RealWorldTimeLight.time.underGround) {
                     RunSequence();
                     totalDeposited = 0;
-                } 
+                }  else TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines.");
             }
             if (Input.GetKeyDown(sortKeybind.Value)) {
                 SortItems.SortInventory();
@@ -163,7 +161,7 @@ namespace TinyResort {
         
         [HarmonyPostfix]
         public static void openInvPostfix() {
-            if (disableMod()) return;
+            
             if (!initalizedObjects && ButtonIsReady) {
                 GO = Instantiate(Inventory.inv.walletSlot.transform.parent.gameObject, Inventory.inv.walletSlot.transform.parent.parent, true);
                 Destroy(GO.transform.GetChild(0).gameObject);
@@ -182,7 +180,6 @@ namespace TinyResort {
                 initalizedObjects = true;
             }
         }
-
 
         public static bool moveCursorPrefix(Inventory __instance) {
             if (InputMaster.input.UISelect()) {
@@ -221,29 +218,9 @@ namespace TinyResort {
             return true;
         }
 
-        [HarmonyPrefix]
-        public static void updatePrefix(CharInteract __instance) {
-            if (disableMod()) return;
-            currentPosition = __instance.transform.position;
-
-            if (Input.GetKeyDown(KeyCode.F12)) Plugin.LogToConsole($"Current Position: ({currentPosition.x}, {currentPosition.y}, {currentPosition.z}) | Underground: {RealWorldTimeLight.time.underGround}");
-            currentHouseDetails = __instance.insideHouseDetails;
-            playerHouseTransform = __instance.playerHouseTransform;
-            isInside = __instance.insidePlayerHouse;
-        }
-  
-        public static void InitializeAllItems() {
-            allItemsInitialized = true;
-            foreach (var item in Inventory.inv.allItems) {
-                var id = item.getItemId();
-                allItems[id] = item;
-            }
-        }
-
         public static void RunSequence() {
-            if (disableMod()) return;
+            OnFinishedParsing = () => UpdateAllItems();
             ParseAllItems();
-            UpdateAllItems();
             totalDeposited = 0;
         }
 
@@ -252,14 +229,12 @@ namespace TinyResort {
         public static ItemInfo GetItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
 
         public static void removeFromPlayerInventory(int itemID, int slotID, int amountRemaining) {
-            if (disableMod()) return;
             Inventory.inv.invSlots[slotID].stack = amountRemaining;
             Inventory.inv.invSlots[slotID].updateSlotContentsAndRefresh(amountRemaining == 0 ? -1 : itemID, amountRemaining);
         }
 
         public static void UpdateAllItems() {
-            if (disableMod()) return;
-            var startingPoint = ignoreHotbar.Value == true ? 11 : 0;
+            var startingPoint = ignoreHotbar.Value ? 11 : 0;
 
             for (int i = startingPoint; i < Inventory.inv.invSlots.Length; i++) {
                 if (!lockedSlots.Contains(i)) {
@@ -285,14 +260,25 @@ namespace TinyResort {
                                 }
                                 info.sources[d].quantity = !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd;
                                 if (slotToUse != 999) {
-                                    ContainerManager.manage.changeSlotInChest(
-                                        info.sources[d].chest.xPos,
-                                        info.sources[d].chest.yPos,
-                                        slotToUse,
-                                        invItemId,
-                                        info.sources[d].quantity,
-                                        info.sources[d].inPlayerHouse
-                                    );
+                                    if (clientInServer) {
+                                        NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(
+                                            info.sources[d].chest.xPos,
+                                            info.sources[d].chest.yPos,
+                                            slotToUse,
+                                            invItemId,
+                                            info.sources[d].quantity
+                                        );
+                                    }
+                                    else {
+                                        ContainerManager.manage.changeSlotInChest(
+                                            info.sources[d].chest.xPos,
+                                            info.sources[d].chest.yPos,
+                                            slotToUse,
+                                            invItemId,
+                                            info.sources[d].quantity,
+                                            info.sources[d].inPlayerHouse
+                                        );
+                                    }
                                     removeFromPlayerInventory(invItemId, i, 0);
                                     totalDeposited++;
                                     break;
@@ -316,21 +302,27 @@ namespace TinyResort {
         }
 
         public static void ParseAllItems() {
-            if (disableMod()) return;
-            if (!allItemsInitialized) { InitializeAllItems(); }
-            // Recreate known chests and inventory and clear items
+            instance.StopAllCoroutines(); 
+            instance.StartCoroutine(ParseAllItemsRoutine());
+        }
+        
+        public static IEnumerator ParseAllItemsRoutine() {
             FindNearbyChests();
+            if (clientInServer) { yield return new WaitUntil(() => unconfirmedChests.Count <= 0); }
             nearbyItems.Clear();
             // Get all items in nearby chests
             foreach (var ChestInfo in nearbyChests) {
                 for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
-                    if (ChestInfo.chest.itemIds[i] != -1 && allItems.ContainsKey(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, allItems[ChestInfo.chest.itemIds[i]].checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
+                    if (ChestInfo.chest.itemIds[i] != -1 && TRItems.DoesItemExist(ChestInfo.chest.itemIds[i])) {
+                        AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest);
+                    }
                 }
             }
+            OnFinishedParsing?.Invoke();
+            OnFinishedParsing = null;
         }
 
         public static void AddItem(int itemID, int quantity, int slotID, bool isStackable, HouseDetails isInHouse, Chest chest) {
-            if (disableMod()) return;
             if (!nearbyItems.TryGetValue(itemID, out var info)) { info = new ItemInfo(); }
             ItemStack source = new ItemStack();
 
@@ -350,51 +342,61 @@ namespace TinyResort {
         }
 
         public static void FindNearbyChests() {
-            if (disableMod()) return;
+            var chests = new List<(ChestPlaceable chest, bool insideHouse)>();
             nearbyChests.Clear();
-
-            var chests = new List<(Collider hit, bool insideHouse)>();
-            Collider[] chestsInsideHouse;
-            Collider[] chestsOutside;
-            int tempX, tempY;
 
             for (int i = 0; i < HouseManager.manage.allHouses.Count; i++) {
                 if (HouseManager.manage.allHouses[i].isThePlayersHouse) { playerHouse = HouseManager.manage.allHouses[i]; }
             }
+            
+            playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
 
-            Plugin.LogToConsole($"{currentPosition.x} {0} {currentPosition.z}");
-            chestsOutside = Physics.OverlapBox(new Vector3(currentPosition.x, -7, currentPosition.z), new Vector3(radius.Value * 2, 40, radius.Value * 2));
-            Plugin.LogToConsole($"{currentPosition.x} {-88} {currentPosition.z}");
-            chestsInsideHouse = Physics.OverlapBox(new Vector3(currentPosition.x, -88, currentPosition.z), new Vector3(radius.Value * 2, 5, radius.Value * 2));
+            // Gets chests inside houses
+            Collider[] chestsInsideHouse = Physics.OverlapBox(new Vector3(playerPosition.x, -88, playerPosition.z), new Vector3(radius.Value * 2, 5, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
+            for (var i = 0; i < chestsInsideHouse.Length; i++) {
+                ChestPlaceable chestComponent = chestsInsideHouse[i].GetComponentInParent<ChestPlaceable>();
+                if (chestComponent == null) continue;
+                chests.Add((chestComponent, true));
+            }
 
-            for (var i = 0; i < chestsInsideHouse.Length; i++) { chests.Add((chestsInsideHouse[i], true)); }
-            for (var j = 0; j < chestsOutside.Length; j++) { chests.Add((chestsOutside[j], false)); }
+            // Gets chests in the overworld
+            Collider[] chestsOutside = Physics.OverlapBox(new Vector3(playerPosition.x, -7, playerPosition.z), new Vector3(radius.Value * 2, 20, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
+            for (var j = 0; j < chestsOutside.Length; j++) {
+                ChestPlaceable chestComponent = chestsOutside[j].GetComponentInParent<ChestPlaceable>();
+                if (chestComponent == null) continue;
+                chests.Add((chestComponent, false));
+            }
+            
             for (var k = 0; k < chests.Count; k++) {
 
-                ChestPlaceable chestComponent = chests[k].hit.GetComponentInParent<ChestPlaceable>();
+                ChestPlaceable chestComponent = chests[k].chest.GetComponentInParent<ChestPlaceable>();
                 if (chestComponent == null) continue;
-                if (!knownChests.Contains(chestComponent)) { knownChests.Add(chestComponent); }
+                
+                var tempX = chestComponent.myXPos();
+                var tempY = chestComponent.myYPos();
 
-                var id = chestComponent.gameObject.GetInstanceID();
-                var layer = chestComponent.gameObject.layer;
-                var name = chestComponent.gameObject.name;
-                var tag = chestComponent.gameObject.tag;
+                HouseDetails house = chests[k].insideHouse ? playerHouse : null;
 
-                // Dbgl($"ID: {id} | Layer: {layer} | Name: {name} | Tag: {tag}");
-
-                tempX = chestComponent.myXPos();
-                tempY = chestComponent.myYPos();
-
-                if (chests[k].insideHouse) { ContainerManager.manage.checkIfEmpty(tempX, tempY, playerHouse); }
-                else
-                    ContainerManager.manage.checkIfEmpty(tempX, tempY, null);
-
-                nearbyChests.Add((ContainerManager.manage.activeChests.First(i => i.xPos == tempX && i.yPos == tempY && i.inside == chests[k].insideHouse), playerHouse));
-                nearbyChests = nearbyChests.Distinct().ToList();
+                if (clientInServer) {
+                    unconfirmedChests[(tempX, tempY)] = house;
+                    NetworkMapSharer.share.localChar.myPickUp.CmdOpenChest(tempX, tempY);
+                    NetworkMapSharer.share.localChar.CmdCloseChest(tempX, tempY);
+                }
+                else {
+                    ContainerManager.manage.checkIfEmpty(tempX, tempY, house);
+                    AddChest(tempX, tempY, house);
+                }
             }
+        }
+
+        private static void AddChest(int xPos, int yPos, HouseDetails house) {
+            nearbyChests.Add((ContainerManager.manage.activeChests.First(i => i.xPos == xPos && i.yPos == yPos), house));
+            nearbyChests = nearbyChests.Distinct().ToList();
         }
     }
 
+
+    
     public class ItemInfo {
         public int quantity;
         public List<ItemStack> sources = new List<ItemStack>();
