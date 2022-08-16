@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Xml.XmlConfiguration;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Core.Logging.Interpolation;
@@ -28,14 +27,12 @@ namespace TinyResort {
         public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.InventoryManagement";
         public const string pluginName = "Inventory Management";
-        public const string pluginVersion = "0.7.0";
-        public static ManualLogSource StaticLogger;
-
+        public const string pluginVersion = "0.8.0";
         private static InventoryManagement instance;
-        
+
         public delegate void ParsingEvent();
         public static ParsingEvent OnFinishedParsing;
-        
+
         public static ConfigEntry<int> radius;
         public static ConfigEntry<bool> ignoreHotbar;
         public static ConfigEntry<string> ignoreSpecifcSlots;
@@ -49,17 +46,14 @@ namespace TinyResort {
         public static ConfigEntry<bool> doSwapTools;
         public static ConfigEntry<bool> showNotifications;
         public static ConfigEntry<bool> useSimilarTools;
+        public static TextMeshPro x;
 
         public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
         private static Dictionary<(int xPos, int yPos), HouseDetails> unconfirmedChests = new Dictionary<(int xPos, int yPos), HouseDetails>();
-
         public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
-        public static List<ChestPlaceable> knownChests = new List<ChestPlaceable>();
         public static HouseDetails playerHouse;
-        public static HouseDetails currentHouseDetails;
-        public static Transform playerHouseTransform;
-        public static bool isInside;
         public static Vector3 currentPosition;
+        
         public static List<int> lockedSlots = new List<int>();
         public static Color LockedSlotColor = new Color(.5f, .5f, .5f, 1f);
         public static Color defaultColor = Color.white;
@@ -70,8 +64,10 @@ namespace TinyResort {
         public static bool clientInServer;
         public static bool checkIfLocking;
 
+        public UnityEvent onButtonPress = new UnityEvent();
+        
         public static Vector3 playerPosition;
-        public static Color checkColor;
+        
         public static GameObject GO;
 
         public void Awake() {
@@ -85,11 +81,11 @@ namespace TinyResort {
             ignoreSpecifcSlots = Config.Bind<string>("DO NOT EDIT", "IgnoreSpecificSlots", "", "DO NOT EDIT.");
             exportKeybind = Config.Bind<KeyCode>("Keybinds", "SortToChestKeybind", KeyCode.KeypadDivide, "Unity KeyCode used for sending inventory items into storage chests.");
             lockSlotKeybind = Config.Bind<KeyCode>("Keybinds", "LockSlot", KeyCode.LeftAlt, "Unity KeyCode used for locking inventory slots. Use this key in combination with the left mouse button to lock the slots.");
-            
-            sortingOrder = Config.Bind<string>("SortingOrder","SortOrder", "relics,bugsorfish,clothes,vehicles,placeables,base,tools,food", "Order to sort inventory and chest items.");
+
+            sortingOrder = Config.Bind<string>("SortingOrder", "SortOrder", "relics,bugsorfish,clothes,vehicles,placeables,base,tools,food", "Order to sort inventory and chest items.");
             sortKeybind = Config.Bind<KeyCode>("Keybinds", "SortInventoryOrChests", KeyCode.KeypadMultiply, "Unity KeyCode used for sorting player and chest inventories.");
             alwaysInventory = Config.Bind<bool>("SortingOrder", "AlwaysSortPlayerInventory", false, "Set to true if you would like the keybind to sort player inventory and chests while a chest window is open. By default, it will only sort the chest.");
-           
+
             warnPercentage = Config.Bind<float>("Tools", "WarnPercentage", 5, "Set the percentage of remaining durability for the notification to warn you.");
             swapPercentage = Config.Bind<float>("Tools", "SwapPercentage", 2, "Set the percentage of remaining durability you want it to automatically swap tools.");
             doSwapTools = Config.Bind<bool>("Tools", "SwapTools", true, "Set to false if you want to disable the automatic swapping of tools.");
@@ -97,7 +93,7 @@ namespace TinyResort {
             useSimilarTools = Config.Bind<bool>("Tools", "UseSimilarTools", true, "Set to false if you want to disable swapping to similar tools (i.e swapping from Basic Axe to Copper Axe).");
 
             #endregion
-            
+
             #region Parse Config String to Int
 
             // Convert this to use a .sav instead of using the base config settings
@@ -111,45 +107,47 @@ namespace TinyResort {
             string[] tmpSort = sortingOrder.Value.Trim().ToLower().Split(',');
             for (var i = 0; i < tmpSort.Length; i++) {
                 Plugin.LogToConsole($"tempSort List: {tmpSort[i]}");
-                SortItems.typeOrder[tmpSort[i]] = i; ;
+                SortItems.typeOrder[tmpSort[i]] = i;
+                ;
             }
-            foreach (var element in SortItems.typeOrder) {
-                Plugin.LogToConsole($"Key: {element.Key} | Value: {element.Value}");
-            }
-            
+            foreach (var element in SortItems.typeOrder) { Plugin.LogToConsole($"Key: {element.Key} | Value: {element.Value}"); }
+
             initalizedObjects = false;
 
             #endregion
 
             #region Patching
+
             Plugin.QuickPatch(typeof(RealWorldTimeLight), "Update", typeof(InventoryManagement), "updateRWTLPrefix");
             Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(InventoryManagement), "moveCursorPrefix");
-            Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement),null, "openInvPostfix");
+            Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), null, "openInvPostfix");
+            Plugin.QuickPatch(typeof(ContainerManager), "UserCode_TargetOpenChest", typeof(InventoryManagement), null, "UserCode_TargetOpenChestPostfix");
 
             Plugin.QuickPatch(typeof(Inventory), "useItemWithFuel", typeof(Tools), "useItemWithFuelPatch");
             Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
+
             #endregion
+
         }
-
-
+        
         public static bool modDisabled => RealWorldTimeLight.time.underGround;
 
         // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
         public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
             clientInServer = !__instance.isServer;
-            
+
             if (Input.GetKeyDown(exportKeybind.Value)) {
                 if (!RealWorldTimeLight.time.underGround) {
                     RunSequence();
                     totalDeposited = 0;
-                }  else TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines.");
+                }
+                else
+                    TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines.");
             }
-            if (Input.GetKeyDown(sortKeybind.Value)) {
-                SortItems.SortInventory();
-            }
+            if (Input.GetKeyDown(sortKeybind.Value)) { SortItems.SortInventory(); }
         }
-        
+
         public void LateUpdate() {
             Color tmpColor = Inventory.inv.invOpen ? LockedSlotColor : Color.white;
             if (lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null) {
@@ -158,38 +156,44 @@ namespace TinyResort {
                 }
             }
         }
-        
+
         [HarmonyPostfix]
         public static void openInvPostfix() {
-            
+
             if (!initalizedObjects && ButtonIsReady) {
                 GO = Instantiate(Inventory.inv.walletSlot.transform.parent.gameObject, Inventory.inv.walletSlot.transform.parent.parent, true);
                 Destroy(GO.transform.GetChild(0).gameObject);
                 Destroy(GO.transform.GetChild(1).GetChild(2).gameObject);
                 var Im = GO.transform.GetChild(1).GetComponent<Image>();
-               // var rect = GO.GetComponent<RectTransform>();
+
+                // var rect = GO.GetComponent<RectTransform>();
                 Im.rectTransform.anchoredPosition += new Vector2(190, 0);
                 var textGO = GO.GetComponentsInChildren<TextMeshProUGUI>();
                 textGO[0].enableWordWrapping = false;
                 textGO[0].rectTransform.anchoredPosition += new Vector2(-18, 0);
                 textGO[0].text = "Sort to Chests";
 
+                instance.onButtonPress.AddListener(RunSequence);
                 var buttonGO = Im.gameObject.AddComponent<InvButton>();
-                Im.gameObject.AddComponent<GraphicRaycaster>();
+                buttonGO.gameObject.AddComponent<GraphicRaycaster>();
                 buttonGO.onButtonPress.AddListener(RunSequence);
+                //buttonGO.onButtonPress.Invoke();
                 initalizedObjects = true;
             }
         }
 
         public static bool moveCursorPrefix(Inventory __instance) {
             if (InputMaster.input.UISelect()) {
+                
                 if (Input.GetKey(lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
 
                     if (slot != null) {
+                        Plugin.LogToConsole($"Slot: {slot.transform.parent.gameObject.name}"); 
                         if (slot.transform.parent.gameObject.name == "InventoryWindows") { tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11; }
                         else if (slot.transform.parent.gameObject.name == "QuickSlotBar") { tempCurrentIgnore = slot.transform.GetSiblingIndex(); }
-                        else { Debug.Log($"Mouse Click On Button: {slot.transform.parent.gameObject.name}");
+                        else {
+                            Debug.Log($"Mouse Click On Button: {slot.transform.parent.gameObject.name}");
                             tempCurrentIgnore = -1;
                         }
                         if (tempCurrentIgnore != -1 && lockedSlots.Contains(tempCurrentIgnore)) {
@@ -212,7 +216,7 @@ namespace TinyResort {
                 for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
                     if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = LockedSlotColor; }
                 }
-                if (checkIfLocking) {return false;}
+                if (checkIfLocking) { return false; }
             }
             checkIfLocking = false;
             return true;
@@ -251,13 +255,9 @@ namespace TinyResort {
 
                                 int slotToUse = 998;
                                 int tmpFirstEmptySlot = checkForEmptySlot(info.sources[d].chest);
-                                if ((hasFuel || !isStackable) && tmpFirstEmptySlot != 999) {
-                                    slotToUse = tmpFirstEmptySlot;
-                                } else if ((hasFuel || !isStackable) && tmpFirstEmptySlot == 999) {
-                                    slotToUse = tmpFirstEmptySlot;
-                                } else if (isStackable) {
-                                    slotToUse = info.sources[d].slotID;
-                                }
+                                if ((hasFuel || !isStackable) && tmpFirstEmptySlot != 999) { slotToUse = tmpFirstEmptySlot; }
+                                else if ((hasFuel || !isStackable) && tmpFirstEmptySlot == 999) { slotToUse = tmpFirstEmptySlot; }
+                                else if (isStackable) { slotToUse = info.sources[d].slotID; }
                                 info.sources[d].quantity = !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd;
                                 if (slotToUse != 999) {
                                     if (clientInServer) {
@@ -301,21 +301,29 @@ namespace TinyResort {
             return 999;
         }
 
+        [HarmonyPostfix]
+        public static void UserCode_TargetOpenChestPostfix(ContainerManager __instance, int xPos, int yPos, int[] itemIds, int[] itemStack) {
+            // TODO: Get proper house details
+            if (unconfirmedChests.TryGetValue((xPos, yPos), out var house)) {
+                unconfirmedChests.Remove((xPos, yPos));
+                AddChest(xPos, yPos, house);
+            }
+        }
+
         public static void ParseAllItems() {
-            instance.StopAllCoroutines(); 
+            instance.StopAllCoroutines();
             instance.StartCoroutine(ParseAllItemsRoutine());
         }
-        
+
         public static IEnumerator ParseAllItemsRoutine() {
             FindNearbyChests();
             if (clientInServer) { yield return new WaitUntil(() => unconfirmedChests.Count <= 0); }
             nearbyItems.Clear();
+
             // Get all items in nearby chests
             foreach (var ChestInfo in nearbyChests) {
                 for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
-                    if (ChestInfo.chest.itemIds[i] != -1 && TRItems.DoesItemExist(ChestInfo.chest.itemIds[i])) {
-                        AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest);
-                    }
+                    if (ChestInfo.chest.itemIds[i] != -1 && TRItems.DoesItemExist(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
                 }
             }
             OnFinishedParsing?.Invoke();
@@ -348,7 +356,7 @@ namespace TinyResort {
             for (int i = 0; i < HouseManager.manage.allHouses.Count; i++) {
                 if (HouseManager.manage.allHouses[i].isThePlayersHouse) { playerHouse = HouseManager.manage.allHouses[i]; }
             }
-            
+
             playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
 
             // Gets chests inside houses
@@ -366,12 +374,12 @@ namespace TinyResort {
                 if (chestComponent == null) continue;
                 chests.Add((chestComponent, false));
             }
-            
+
             for (var k = 0; k < chests.Count; k++) {
 
                 ChestPlaceable chestComponent = chests[k].chest.GetComponentInParent<ChestPlaceable>();
                 if (chestComponent == null) continue;
-                
+
                 var tempX = chestComponent.myXPos();
                 var tempY = chestComponent.myYPos();
 
@@ -393,22 +401,19 @@ namespace TinyResort {
             nearbyChests.Add((ContainerManager.manage.activeChests.First(i => i.xPos == xPos && i.yPos == yPos), house));
             nearbyChests = nearbyChests.Distinct().ToList();
         }
+
+        public class ItemInfo {
+            public int quantity;
+            public List<ItemStack> sources = new List<ItemStack>();
+        }
+
+        public class ItemStack {
+            public bool playerInventory;
+            public int slotID;
+            public int quantity;
+            public int fuel;
+            public HouseDetails inPlayerHouse;
+            public Chest chest;
+        }
     }
-
-
-    
-    public class ItemInfo {
-        public int quantity;
-        public List<ItemStack> sources = new List<ItemStack>();
-    }
-
-    public class ItemStack {
-        public bool playerInventory;
-        public int slotID;
-        public int quantity;
-        public int fuel;
-        public HouseDetails inPlayerHouse;
-        public Chest chest;
-    }
-
 }

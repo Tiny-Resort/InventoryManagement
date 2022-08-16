@@ -12,7 +12,6 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem.HID;
-using UnityEngine.UI;
 
 namespace TinyResort {
 
