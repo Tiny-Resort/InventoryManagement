@@ -27,7 +27,7 @@
       <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
     </ItemGroup>
      <PropertyGroup>
-         <PostBuildEvent>call "$(SolutionDir)..\PostBuildBat.bat" "$(SolutionDir)obj\Debug\net472\$(AssemblyName).dll" "$(AssemblyName)"</PostBuildEvent>
+         <PostBuildEvent>call "$(SolutionDir)..\PostBuildBat.bat" "$(SolutionDir)bin\Debug\net472\$(AssemblyName).dll" "$(AssemblyName)"</PostBuildEvent>
      </PropertyGroup>
   </Project>
 
