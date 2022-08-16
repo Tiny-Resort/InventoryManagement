@@ -108,7 +108,6 @@ namespace TinyResort {
             for (var i = 0; i < tmpSort.Length; i++) {
                 Plugin.LogToConsole($"tempSort List: {tmpSort[i]}");
                 SortItems.typeOrder[tmpSort[i]] = i;
-                ;
             }
             foreach (var element in SortItems.typeOrder) { Plugin.LogToConsole($"Key: {element.Key} | Value: {element.Value}"); }
 
