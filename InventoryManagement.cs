@@ -63,6 +63,7 @@ namespace TinyResort {
         public static bool ButtonIsReady = false;
         public static bool clientInServer;
         public static bool checkIfLocking;
+        public static bool findingNearbyChests;
 
         public UnityEvent onButtonPress = new UnityEvent();
         
@@ -121,6 +122,7 @@ namespace TinyResort {
             Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(InventoryManagement), "moveCursorPrefix");
             Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), null, "openInvPostfix");
             Plugin.QuickPatch(typeof(ContainerManager), "UserCode_TargetOpenChest", typeof(InventoryManagement), null, "UserCode_TargetOpenChestPostfix");
+            Plugin.QuickPatch(typeof(ChestWindow), "openChestInWindow", typeof(InventoryManagement), "openChestInWindowPrefix");
 
             Plugin.QuickPatch(typeof(Inventory), "useItemWithFuel", typeof(Tools), "useItemWithFuelPatch");
             Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
@@ -300,6 +302,8 @@ namespace TinyResort {
             return 999;
         }
 
+        public static bool openChestInWindowPrefix() { return !findingNearbyChests; }
+
         [HarmonyPostfix]
         public static void UserCode_TargetOpenChestPostfix(ContainerManager __instance, int xPos, int yPos, int[] itemIds, int[] itemStack) {
             // TODO: Get proper house details
@@ -315,6 +319,7 @@ namespace TinyResort {
         }
 
         public static IEnumerator ParseAllItemsRoutine() {
+            findingNearbyChests = true;
             FindNearbyChests();
             if (clientInServer) { yield return new WaitUntil(() => unconfirmedChests.Count <= 0); }
             nearbyItems.Clear();
@@ -325,6 +330,7 @@ namespace TinyResort {
                     if (ChestInfo.chest.itemIds[i] != -1 && TRItems.DoesItemExist(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
                 }
             }
+            findingNearbyChests = false;
             OnFinishedParsing?.Invoke();
             OnFinishedParsing = null;
         }
