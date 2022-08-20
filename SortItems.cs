@@ -78,7 +78,7 @@ namespace TinyResort {
                 }
                 NotificationManager.manage.createChatNotification($"The chest's inventory has been sorted.");
             }
-            if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines."); }
+            if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "Sorting chests is disabled in the deep mines."); }
             SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
 
             #endregion

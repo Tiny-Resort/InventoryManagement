@@ -131,7 +131,7 @@ namespace TinyResort {
 
         }
         
-        public static bool modDisabled => RealWorldTimeLight.time.underGround;
+        public static bool modDisabled => RealWorldTimeLight.time.underGround || (NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer);
 
         // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
@@ -139,12 +139,12 @@ namespace TinyResort {
             clientInServer = !__instance.isServer;
 
             if (Input.GetKeyDown(exportKeybind.Value)) {
-                if (!RealWorldTimeLight.time.underGround) {
+                if (!modDisabled) {
                     RunSequence();
                     totalDeposited = 0;
                 }
                 else
-                    TRTools.TopNotification("Inventory Management", "This mod is disabled in the deep mines.");
+                    TRTools.TopNotification("Inventory Management", "Send items to chests is disabled in the mines/playerhouse.");
             }
             if (Input.GetKeyDown(sortKeybind.Value)) { SortItems.SortInventory(); }
         }
@@ -185,10 +185,8 @@ namespace TinyResort {
 
         public static bool moveCursorPrefix(Inventory __instance) {
             if (InputMaster.input.UISelect()) {
-                
                 if (Input.GetKey(lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
-
                     if (slot != null) {
                         Plugin.LogToConsole($"Slot: {slot.transform.parent.gameObject.name}"); 
                         if (slot.transform.parent.gameObject.name == "InventoryWindows") { tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11; }
@@ -312,7 +310,7 @@ namespace TinyResort {
                 AddChest(xPos, yPos, house);
             }
         }
-
+        
         public static void ParseAllItems() {
             instance.StopAllCoroutines();
             instance.StartCoroutine(ParseAllItemsRoutine());
@@ -362,6 +360,7 @@ namespace TinyResort {
                 if (HouseManager.manage.allHouses[i].isThePlayersHouse) { playerHouse = HouseManager.manage.allHouses[i]; }
             }
 
+            
             playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
 
             // Gets chests inside houses
@@ -382,11 +381,8 @@ namespace TinyResort {
 
             for (var k = 0; k < chests.Count; k++) {
 
-                ChestPlaceable chestComponent = chests[k].chest.GetComponentInParent<ChestPlaceable>();
-                if (chestComponent == null) continue;
-
-                var tempX = chestComponent.myXPos();
-                var tempY = chestComponent.myYPos();
+                var tempX = chests[k].chest.myXPos();
+                var tempY = chests[k].chest.myYPos();
 
                 HouseDetails house = chests[k].insideHouse ? playerHouse : null;
 
