@@ -65,6 +65,12 @@ namespace TinyResort {
         public static bool checkIfLocking;
         public static bool findingNearbyChests;
 
+        public static bool ClientInsideHouse => NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
+        public static bool ClientOutsideHouse => !NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
+        
+        public static bool modDisabled => RealWorldTimeLight.time.underGround;
+
+
         public UnityEvent onButtonPress = new UnityEvent();
         
         public static Vector3 playerPosition;
@@ -128,11 +134,8 @@ namespace TinyResort {
             Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
 
             #endregion
-
         }
         
-        public static bool modDisabled => RealWorldTimeLight.time.underGround || (NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer);
-
         // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
         public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
@@ -364,21 +367,25 @@ namespace TinyResort {
             playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
 
             // Gets chests inside houses
-            Collider[] chestsInsideHouse = Physics.OverlapBox(new Vector3(playerPosition.x, -88, playerPosition.z), new Vector3(radius.Value * 2, 5, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
-            for (var i = 0; i < chestsInsideHouse.Length; i++) {
-                ChestPlaceable chestComponent = chestsInsideHouse[i].GetComponentInParent<ChestPlaceable>();
-                if (chestComponent == null) continue;
-                chests.Add((chestComponent, true));
+            if (ClientInsideHouse || !clientInServer) {
+                Collider[] chestsInsideHouse = Physics.OverlapBox(new Vector3(playerPosition.x, -88, playerPosition.z), new Vector3(radius.Value * 2, 5, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
+                for (var i = 0; i < chestsInsideHouse.Length; i++) {
+                    ChestPlaceable chestComponent = chestsInsideHouse[i].GetComponentInParent<ChestPlaceable>();
+                    if (chestComponent == null) continue;
+                    chests.Add((chestComponent, true));
+                }
             }
 
             // Gets chests in the overworld
-            Collider[] chestsOutside = Physics.OverlapBox(new Vector3(playerPosition.x, -7, playerPosition.z), new Vector3(radius.Value * 2, 20, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
-            for (var j = 0; j < chestsOutside.Length; j++) {
-                ChestPlaceable chestComponent = chestsOutside[j].GetComponentInParent<ChestPlaceable>();
-                if (chestComponent == null) continue;
-                chests.Add((chestComponent, false));
+            if (ClientOutsideHouse || !clientInServer) {
+                Collider[] chestsOutside = Physics.OverlapBox(new Vector3(playerPosition.x, -7, playerPosition.z), new Vector3(radius.Value * 2, 20, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
+                for (var j = 0; j < chestsOutside.Length; j++) {
+                    ChestPlaceable chestComponent = chestsOutside[j].GetComponentInParent<ChestPlaceable>();
+                    if (chestComponent == null) continue;
+                    chests.Add((chestComponent, false));
+                }
             }
-
+            
             for (var k = 0; k < chests.Count; k++) {
 
                 var tempX = chests[k].chest.myXPos();
