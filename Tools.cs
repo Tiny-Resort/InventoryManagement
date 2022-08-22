@@ -25,7 +25,7 @@ namespace TinyResort {
             nextFuel = __instance.invSlots[__instance.selectedSlot].stack - __instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].fuelOnUse;
             percentRemaining = (float)nextFuel / maxFuel * 100f;
 
-            if (percentRemaining <= InventoryManagement.warnPercentage.Value && !warnedPercent && InventoryManagement.showNotifications.Value) {
+            if (percentRemaining <= InventoryManagement.warnPercentage.Value && !warnedPercent && InventoryManagement.showNotifications.Value && !__instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].itemPrefab.name.Contains("Watercan")) {
                 TRTools.TopNotification($"{__instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].itemName}", $"Durability is at {percentRemaining}%");
                 ASound WarnTools = StatusManager.manage.lowHealthSound;
                 WarnTools.volume = WarnTools.volume + 0.2f;
