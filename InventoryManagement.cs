@@ -27,7 +27,7 @@ namespace TinyResort {
         public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.InventoryManagement";
         public const string pluginName = "Inventory Management";
-        public const string pluginVersion = "0.8.0";
+        public const string pluginVersion = "0.8.1";
         private static InventoryManagement instance;
 
         public delegate void ParsingEvent();
