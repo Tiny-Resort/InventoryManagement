@@ -37,12 +37,12 @@ namespace TinyResort {
             if (!ChestWindow.chests.chestWindowOpen || InventoryManagement.alwaysInventory.Value) {
                 inventoryToSort = inventoryToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
                 for (int j = 11; j < Inventory.inv.invSlots.Length; j++) {
-                    if (!InventoryManagement.lockedSlots.Contains(j)) { Inventory.inv.invSlots[j].updateSlotContentsAndRefresh(-1, 0); }
+                    if (!LockSlots.lockedSlots.Contains(j)) { Inventory.inv.invSlots[j].updateSlotContentsAndRefresh(-1, 0); }
                 }
                 for (int k = 0; k < inventoryToSort.Count; k++) {
                     for (int l = k + 11; l < Inventory.inv.invSlots.Length; l++) {
-                        InventoryManagement.Plugin.LogToConsole($"Locked SLot?: {l}: {!InventoryManagement.lockedSlots.Contains(l)}");
-                        if (!InventoryManagement.lockedSlots.Contains(l) && Inventory.inv.invSlots[l].itemNo == -1) {
+                        InventoryManagement.Plugin.LogToConsole($"Locked SLot?: {l}: {!LockSlots.lockedSlots.Contains(l)}");
+                        if (!LockSlots.lockedSlots.Contains(l) && Inventory.inv.invSlots[l].itemNo == -1) {
                             if (!inventoryToSort[k].isStackable && inventoryToSort[k].hasFuel) { Inventory.inv.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].fuel); }
                             else { Inventory.inv.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].quantity); }
                             break;
@@ -267,7 +267,7 @@ namespace TinyResort {
             chestToSort.Clear();
             currentChest = null;
             for (var i = 11; i < Inventory.inv.invSlots.Length; i++) {
-                if (!InventoryManagement.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && TRItems.DoesItemExist(Inventory.inv.invSlots[i].itemNo)) {
+                if (!LockSlots.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && TRItems.DoesItemExist(Inventory.inv.invSlots[i].itemNo)) {
                     AddInventoryItem(Inventory.inv.invSlots[i].itemNo, Inventory.inv.invSlots[i].stack, TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).checkIfStackable(), TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).hasFuel, TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).value);
                 }
             }

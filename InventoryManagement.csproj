@@ -18,6 +18,9 @@
      <Compile Include="..\TinyResortTools\Tiny Resort Tools\**">
          <Link>Tiny Resort Tools\**</Link>
      </Compile>
+     <Compile Update="..\TinyResortTools\Tiny Resort Tools\Patches\UserCode_TargetOpenChestPatch.cs">
+       <Link>Tiny Resort Tools\Patches\UserCode_TargetOpenChestPostfix.cs</Link>
+     </Compile>
     </ItemGroup>
     <ItemGroup>
         <Reference Include="Assembly-CSharp_publicized">
