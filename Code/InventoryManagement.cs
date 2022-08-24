@@ -46,34 +46,21 @@ namespace TinyResort {
         public static ConfigEntry<bool> doSwapTools;
         public static ConfigEntry<bool> showNotifications;
         public static ConfigEntry<bool> useSimilarTools;
-        public static TextMeshPro x;
 
-        public static List<(Chest chest, HouseDetails house)> nearbyChests = new List<(Chest chest, HouseDetails house)>();
-        private static Dictionary<(int xPos, int yPos), HouseDetails> unconfirmedChests = new Dictionary<(int xPos, int yPos), HouseDetails>();
+
         public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
-        public static HouseDetails playerHouse;
-        public static Vector3 currentPosition;
-        
-        public static List<int> lockedSlots = new List<int>();
-        public static Color LockedSlotColor = new Color(.5f, .5f, .5f, 1f);
-        public static Color defaultColor = Color.white;
-        public static int tempCurrentIgnore;
+
+
         public static int totalDeposited = 0;
         public static bool initalizedObjects = false;
         public static bool ButtonIsReady = false;
-        public static bool clientInServer;
-        public static bool checkIfLocking;
         public static bool findingNearbyChests;
 
-        public static bool ClientInsideHouse => NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
-        public static bool ClientOutsideHouse => !NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
-        
+        public static bool clientInServer => RealWorldTimeLight.time.isServer;
         public static bool modDisabled => RealWorldTimeLight.time.underGround;
-
 
         public UnityEvent onButtonPress = new UnityEvent();
         
-        public static Vector3 playerPosition;
         
         public static GameObject GO;
 
@@ -108,7 +95,7 @@ namespace TinyResort {
                 string[] tmp = ignoreSpecifcSlots.Value.Trim().Split(',');
                 for (var i = 0; i < tmp.Length - 1; i++) {
                     int.TryParse(tmp[i], out int tmpInt);
-                    lockedSlots.Add(tmpInt);
+                    LockSlots.lockedSlots.Add(tmpInt);
                 }
             }
             string[] tmpSort = sortingOrder.Value.Trim().ToLower().Split(',');
@@ -125,9 +112,9 @@ namespace TinyResort {
             #region Patching
 
             Plugin.QuickPatch(typeof(RealWorldTimeLight), "Update", typeof(InventoryManagement), "updateRWTLPrefix");
-            Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(InventoryManagement), "moveCursorPrefix");
+            Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(LockSlots), "moveCursorPrefix");
             Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), null, "openInvPostfix");
-            Plugin.QuickPatch(typeof(ContainerManager), "UserCode_TargetOpenChest", typeof(InventoryManagement), null, "UserCode_TargetOpenChestPostfix");
+            Plugin.QuickPatch(typeof(ContainerManager), "UserCode_TargetOpenChest", typeof(SearchNearbyChests), null, "UserCode_TargetOpenChestPostfix");
             Plugin.QuickPatch(typeof(ChestWindow), "openChestInWindow", typeof(InventoryManagement), "openChestInWindowPrefix");
 
             Plugin.QuickPatch(typeof(Inventory), "useItemWithFuel", typeof(Tools), "useItemWithFuelPatch");
@@ -139,8 +126,6 @@ namespace TinyResort {
         // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
         [HarmonyPrefix]
         public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
-            clientInServer = !__instance.isServer;
-
             if (Input.GetKeyDown(exportKeybind.Value)) {
                 if (!modDisabled) {
                     RunSequence();
@@ -153,10 +138,10 @@ namespace TinyResort {
         }
 
         public void LateUpdate() {
-            Color tmpColor = Inventory.inv.invOpen ? LockedSlotColor : Color.white;
-            if (lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null) {
+            Color tmpColor = Inventory.inv.invOpen ? LockSlots.LockedSlotColor : Color.white;
+            if (LockSlots.lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null) {
                 for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
-                    if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = tmpColor; }
+                    if (LockSlots.lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = tmpColor; }
                 }
             }
         }
@@ -186,44 +171,6 @@ namespace TinyResort {
             }
         }
 
-        public static bool moveCursorPrefix(Inventory __instance) {
-            if (InputMaster.input.UISelect()) {
-                if (Input.GetKey(lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
-                    InventorySlot slot = __instance.cursorPress();
-                    if (slot != null) {
-                        Plugin.LogToConsole($"Slot: {slot.transform.parent.gameObject.name}"); 
-                        if (slot.transform.parent.gameObject.name == "InventoryWindows") { tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11; }
-                        else if (slot.transform.parent.gameObject.name == "QuickSlotBar") { tempCurrentIgnore = slot.transform.GetSiblingIndex(); }
-                        else {
-                            Debug.Log($"Mouse Click On Button: {slot.transform.parent.gameObject.name}");
-                            tempCurrentIgnore = -1;
-                        }
-                        if (tempCurrentIgnore != -1 && lockedSlots.Contains(tempCurrentIgnore)) {
-                            lockedSlots.Remove(tempCurrentIgnore);
-                            slot.slotBackgroundImage.color = defaultColor;
-                        }
-                        else if (tempCurrentIgnore != -1) {
-                            lockedSlots.Add(tempCurrentIgnore);
-                            Inventory.inv.invSlots[tempCurrentIgnore].slotBackgroundImage.color = LockedSlotColor;
-                        }
-                    }
-                    checkIfLocking = true;
-                }
-                ignoreSpecifcSlots.Value = null;
-                foreach (var element in lockedSlots) {
-                    var tempString = ignoreSpecifcSlots == null ? element + "," : ignoreSpecifcSlots.Value + element + ",";
-                    ignoreSpecifcSlots.Value = tempString;
-                }
-                ignoreSpecifcSlots.ConfigFile.Save();
-                for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
-                    if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = LockedSlotColor; }
-                }
-                if (checkIfLocking) { return false; }
-            }
-            checkIfLocking = false;
-            return true;
-        }
-
         public static void RunSequence() {
             OnFinishedParsing = () => UpdateAllItems();
             ParseAllItems();
@@ -243,7 +190,7 @@ namespace TinyResort {
             var startingPoint = ignoreHotbar.Value ? 11 : 0;
 
             for (int i = startingPoint; i < Inventory.inv.invSlots.Length; i++) {
-                if (!lockedSlots.Contains(i)) {
+                if (!LockSlots.lockedSlots.Contains(i)) {
                     int invItemId = Inventory.inv.invSlots[i].itemNo;
                     if (invItemId != -1) {
                         int amountToAdd = Inventory.inv.invSlots[i].stack;
@@ -304,15 +251,6 @@ namespace TinyResort {
         }
 
         public static bool openChestInWindowPrefix() { return !findingNearbyChests; }
-
-        [HarmonyPostfix]
-        public static void UserCode_TargetOpenChestPostfix(ContainerManager __instance, int xPos, int yPos, int[] itemIds, int[] itemStack) {
-            // TODO: Get proper house details
-            if (unconfirmedChests.TryGetValue((xPos, yPos), out var house)) {
-                unconfirmedChests.Remove((xPos, yPos));
-                AddChest(xPos, yPos, house);
-            }
-        }
         
         public static void ParseAllItems() {
             instance.StopAllCoroutines();
@@ -321,12 +259,12 @@ namespace TinyResort {
 
         public static IEnumerator ParseAllItemsRoutine() {
             findingNearbyChests = true;
-            FindNearbyChests();
-            if (clientInServer) { yield return new WaitUntil(() => unconfirmedChests.Count <= 0); }
+            SearchNearbyChests.FindNearbyChests();
+            if (clientInServer) { yield return new WaitUntil(() => SearchNearbyChests.unconfirmedChests.Count <= 0); }
             nearbyItems.Clear();
 
             // Get all items in nearby chests
-            foreach (var ChestInfo in nearbyChests) {
+            foreach (var ChestInfo in SearchNearbyChests.nearbyChests) {
                 for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
                     if (ChestInfo.chest.itemIds[i] != -1 && TRItems.DoesItemExist(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
                 }
@@ -354,61 +292,7 @@ namespace TinyResort {
             info.sources.Add(source);
             nearbyItems[itemID] = info;
         }
-
-        public static void FindNearbyChests() {
-            var chests = new List<(ChestPlaceable chest, bool insideHouse)>();
-            nearbyChests.Clear();
-
-            for (int i = 0; i < HouseManager.manage.allHouses.Count; i++) {
-                if (HouseManager.manage.allHouses[i].isThePlayersHouse) { playerHouse = HouseManager.manage.allHouses[i]; }
-            }
-
-            
-            playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
-
-            // Gets chests inside houses
-            if (ClientInsideHouse || !clientInServer) {
-                Collider[] chestsInsideHouse = Physics.OverlapBox(new Vector3(playerPosition.x, -88, playerPosition.z), new Vector3(radius.Value * 2, 5, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
-                for (var i = 0; i < chestsInsideHouse.Length; i++) {
-                    ChestPlaceable chestComponent = chestsInsideHouse[i].GetComponentInParent<ChestPlaceable>();
-                    if (chestComponent == null) continue;
-                    chests.Add((chestComponent, true));
-                }
-            }
-
-            // Gets chests in the overworld
-            if (ClientOutsideHouse || !clientInServer) {
-                Collider[] chestsOutside = Physics.OverlapBox(new Vector3(playerPosition.x, -7, playerPosition.z), new Vector3(radius.Value * 2, 20, radius.Value * 2), Quaternion.identity, LayerMask.GetMask(LayerMask.LayerToName(15)));
-                for (var j = 0; j < chestsOutside.Length; j++) {
-                    ChestPlaceable chestComponent = chestsOutside[j].GetComponentInParent<ChestPlaceable>();
-                    if (chestComponent == null) continue;
-                    chests.Add((chestComponent, false));
-                }
-            }
-            
-            for (var k = 0; k < chests.Count; k++) {
-
-                var tempX = chests[k].chest.myXPos();
-                var tempY = chests[k].chest.myYPos();
-
-                HouseDetails house = chests[k].insideHouse ? playerHouse : null;
-
-                if (clientInServer) {
-                    unconfirmedChests[(tempX, tempY)] = house;
-                    NetworkMapSharer.share.localChar.myPickUp.CmdOpenChest(tempX, tempY);
-                    NetworkMapSharer.share.localChar.CmdCloseChest(tempX, tempY);
-                }
-                else {
-                    ContainerManager.manage.checkIfEmpty(tempX, tempY, house);
-                    AddChest(tempX, tempY, house);
-                }
-            }
-        }
-
-        private static void AddChest(int xPos, int yPos, HouseDetails house) {
-            nearbyChests.Add((ContainerManager.manage.activeChests.First(i => i.xPos == xPos && i.yPos == yPos), house));
-            nearbyChests = nearbyChests.Distinct().ToList();
-        }
+        
 
         public class ItemInfo {
             public int quantity;
