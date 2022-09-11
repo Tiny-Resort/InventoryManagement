@@ -31,7 +31,7 @@ namespace TinyResort {
                 WarnTools.volume = WarnTools.volume + 0.2f;
                 SoundManager.manage.play2DSound(WarnTools);
 
-                for (int i = 0; i < SoundManager.manage.my2DAudios.Length; i++) { InventoryManagement.Plugin.LogToConsole($"Sound: {SoundManager.manage.my2DAudios[i].name}"); }
+                for (int i = 0; i < SoundManager.manage.my2DAudios.Length; i++) { InventoryManagement.Plugin.Log($"Sound: {SoundManager.manage.my2DAudios[i].name}"); }
                 warnedPercent = true;
             }
 
@@ -51,7 +51,7 @@ namespace TinyResort {
 
             replacementTools.Clear();
             for (var i = 0; i < currentInventory.invSlots.Length; i++) {
-                InventoryManagement.Plugin.LogToConsole($"i: {i} | Size: {currentInventory.invSlots.Length}");
+                InventoryManagement.Plugin.Log($"i: {i} | Size: {currentInventory.invSlots.Length}");
                 if (currentInventory.invSlots[i].itemNo != -1 && Inventory.inv.allItems[currentInventory.invSlots[i].itemNo].hasFuel) {
                     float tempItemFuel = (float)currentInventory.invSlots[i].stack / currentInventory.invSlots[i].itemInSlot.fuelMax * 100;
 

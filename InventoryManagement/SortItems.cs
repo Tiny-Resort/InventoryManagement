@@ -1,17 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using BepInEx;
-using BepInEx.Configuration;
-using BepInEx.Core.Logging.Interpolation;
-using BepInEx.Logging;
-using HarmonyLib;
-using TMPro;
-using UnityEngine;
-using UnityEngine.Events;
-using UnityEngine.InputSystem.HID;
 
 namespace TinyResort {
 
@@ -37,12 +25,12 @@ namespace TinyResort {
             if (!ChestWindow.chests.chestWindowOpen || InventoryManagement.alwaysInventory.Value) {
                 inventoryToSort = inventoryToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
                 for (int j = 11; j < Inventory.inv.invSlots.Length; j++) {
-                    if (!InventoryManagement.lockedSlots.Contains(j)) { Inventory.inv.invSlots[j].updateSlotContentsAndRefresh(-1, 0); }
+                    if (!LockSlots.lockedSlots.Contains(j)) { Inventory.inv.invSlots[j].updateSlotContentsAndRefresh(-1, 0); }
                 }
                 for (int k = 0; k < inventoryToSort.Count; k++) {
                     for (int l = k + 11; l < Inventory.inv.invSlots.Length; l++) {
-                        InventoryManagement.Plugin.LogToConsole($"Locked SLot?: {l}: {!InventoryManagement.lockedSlots.Contains(l)}");
-                        if (!InventoryManagement.lockedSlots.Contains(l) && Inventory.inv.invSlots[l].itemNo == -1) {
+                        InventoryManagement.Plugin.Log($"Locked SLot?: {l}: {!LockSlots.lockedSlots.Contains(l)}");
+                        if (!LockSlots.lockedSlots.Contains(l) && Inventory.inv.invSlots[l].itemNo == -1) {
                             if (!inventoryToSort[k].isStackable && inventoryToSort[k].hasFuel) { Inventory.inv.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].fuel); }
                             else { Inventory.inv.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].quantity); }
                             break;
@@ -234,7 +222,7 @@ namespace TinyResort {
                         tmpInt = 33;
                         break;
                 }
-            InventoryManagement.Plugin.LogToConsole($"PrefabName: {prefabName} | Temp Int: {tmpInt}");
+            InventoryManagement.Plugin.Log($"PrefabName: {prefabName} | Temp Int: {tmpInt}");
             return tmpInt;
         }
 
@@ -267,7 +255,7 @@ namespace TinyResort {
             chestToSort.Clear();
             currentChest = null;
             for (var i = 11; i < Inventory.inv.invSlots.Length; i++) {
-                if (!InventoryManagement.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && TRItems.DoesItemExist(Inventory.inv.invSlots[i].itemNo)) {
+                if (!LockSlots.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && TRItems.DoesItemExist(Inventory.inv.invSlots[i].itemNo)) {
                     AddInventoryItem(Inventory.inv.invSlots[i].itemNo, Inventory.inv.invSlots[i].stack, TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).checkIfStackable(), TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).hasFuel, TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).value);
                 }
             }
@@ -286,7 +274,7 @@ namespace TinyResort {
                 if (currentChest != null) {
                     for (var i = 0; i < currentChest.itemIds.Length; i++) {
                         if (currentChest.itemIds[i] != -1 && TRItems.DoesItemExist(currentChest.itemIds[i])) {
-                            InventoryManagement.Plugin.LogToConsole($"{currentChest.itemIds[i]}");
+                            InventoryManagement.Plugin.Log($"{currentChest.itemIds[i]}");
                             AddChestItem(currentChest.itemIds[i], currentChest.itemStacks[i], TRItems.GetItemDetails(currentChest.itemIds[i]).checkIfStackable(), TRItems.GetItemDetails(currentChest.itemIds[i]).hasFuel, currentChestHouseDetails, TRItems.GetItemDetails(currentChest.itemIds[i]).value);
                         }
                     }
