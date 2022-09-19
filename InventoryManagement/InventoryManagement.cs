@@ -1,20 +1,13 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using BepInEx;
 using BepInEx.Configuration;
-using BepInEx.Core.Logging.Interpolation;
-using BepInEx.Logging;
 using HarmonyLib;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.InputSystem.HID;
-using UnityEngine.UIElements;
-using Image = UnityEngine.UI.Image;
+using UnityEngine.UI;
 
 // TODO: Add the ability to send specific items to nearest chest by some key combination
 // TODO: Update method to use .sav rather than config file
@@ -59,29 +52,42 @@ namespace TinyResort {
         public static Dictionary<int, ItemInfo> nearbyItems = new Dictionary<int, ItemInfo>();
         public static HouseDetails playerHouse;
         public static Vector3 currentPosition;
-        
+
         public static int tempCurrentIgnore;
         public static int totalDeposited = 0;
         public static bool initalizedObjects = false;
-        public static bool ButtonIsReady = false;
+        public static bool ButtonIsReady = true;
         public static bool clientInServer;
         public static bool findingNearbyChests;
 
         public static bool ClientInsideHouse => NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
         public static bool ClientOutsideHouse => !NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
-        
+
         public static bool modDisabled => RealWorldTimeLight.time.underGround;
 
-        public UnityEvent onButtonPress = new UnityEvent();
-        
+        public static GameObject button;
+        public static GameObject InventoryMenu;
+        public static GameObject Grid;
+
+        public static GameObject SendToChests;
+        public static GameObject SortInventory;
+        public static GameObject SortChest;
+
         public static Vector3 playerPosition;
 
+        public static bool LookingForButtons = true;
+
         public static GameObject GO;
+
+        public static GameObject Test1;
 
         public void Awake() {
             instance = this;
 
+            //TRDrawing.Instantiate("MapCanvas/MenuScreen/CornerStuff/CreditsButton");
+
             Plugin = TRTools.Initialize(this, 50);
+
             #region Configuration
 
             radius = Config.Bind<int>("General", "Range", 30, "Increases the range it looks for storage containers by an approximate tile count.");
@@ -141,10 +147,106 @@ namespace TinyResort {
             // Patches for tools
             Plugin.QuickPatch(typeof(Inventory), "useItemWithFuel", typeof(Tools), "useItemWithFuelPatch");
             Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
+
             #endregion
+
         }
-        
-        // Update method to export items to chest to a buttom or a different (customizable) hotkey. 
+
+        private void Update() {
+            if (WorldManager.manageWorld && LookingForButtons) {
+                // LookingForButtons = !LookForButtons();
+                //if (!LookingForButtons) 
+                CreateButtons();
+                LookingForButtons = false;
+            }
+            if (Test1) { Plugin.Log($"Test Info: {Test1.name}"); } 
+        }
+
+        /*public static bool LookForButtons() {
+            if (!button)  button = GameObject.Find("MapCanvas/MenuScreen/CornerStuff/CreditsButton");
+            if (!InventoryMenu) InventoryMenu = GameObject.Find("Canvas/Menu");
+            if (button && InventoryMenu) return true;
+            else return false;
+        }*/
+
+        public static void CreateButtons() {
+
+            InventoryMenu = TRDrawing.FindObject("Canvas/Menu");
+
+            Plugin.Log($"Menu? : {InventoryMenu.name}");
+            Grid = new GameObject();
+            Grid.name = "Inventory Management Grid";
+            Grid.transform.SetParent(InventoryMenu.transform);
+            Grid.transform.SetAsLastSibling();
+            var gridLayoutGroup = Grid.AddComponent<GridLayoutGroup>();
+
+            gridLayoutGroup.cellSize = new Vector2(52, 30);
+            gridLayoutGroup.spacing = new Vector2(8, 2);
+            gridLayoutGroup.childAlignment = TextAnchor.UpperCenter;
+            gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            gridLayoutGroup.constraintCount = 3;
+
+            var rect = Grid.GetComponent<RectTransform>();
+            rect.pivot = new Vector2(0.5f, 1);
+            rect.anchorMax = new Vector2(0.5f, 1);
+            rect.anchorMin = new Vector2(0.5f, 1);
+            rect.localScale = Vector3.one;
+            rect.anchoredPosition = new Vector2(-179, -475);
+
+            Plugin.Log($"Is Button Ready? {button}");
+
+            string ButtonLocation = "MapCanvas/MenuScreen/CornerStuff/CreditsButton";
+
+            SendToChests = TRDrawing.AddButton(ButtonLocation, Grid, "Send To Chests", "Send to Chests", 8, RunSequence);
+            /*SendToChests = TRDrawing.InstantiateObject("MapCanvas/MenuScreen/CornerStuff/CreditsButton", Grid);
+
+            SendToChests.name = "Send To Chests";
+            var STCText = SendToChests.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+            STCText.text = "Send to Chests";
+            STCText.fontSize = 8;*/
+
+            //var STCClick = SendToChests.GetComponent<InvButton>();
+            //var STCClick = TRDrawing.AddButton(SendToChests, RunSequence);
+            
+            /*STCClick.onButtonPress = new UnityEvent();
+            STCClick.onButtonPress.AddListener(RunSequence);
+            STCClick.isACloseButton = false;
+            STCClick.isSnappable = true;*/
+
+            SortChest = TRDrawing.InstantiateObject("MapCanvas/MenuScreen/CornerStuff/CreditsButton", Grid); 
+            SortChest.name = "Sort Chest";
+            var SCText = SortChest.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+            SCText.text = "Sort\nChest";
+            SCText.fontSize = 8;
+
+            var SCClick = SortChest.GetComponent<InvButton>();
+            SCClick.onButtonPress = new UnityEvent();
+            SCClick.onButtonPress.AddListener(RunSequence);
+            SCClick.isACloseButton = false;
+            SCClick.isSnappable = true;
+
+            
+            SortInventory = TRDrawing.InstantiateObject("MapCanvas/MenuScreen/CornerStuff/CreditsButton", Grid);
+            SortInventory.name = "Sort Inventory";
+            var SIText = SortInventory.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
+            SIText.text = "Sort\nBag";
+            SIText.fontSize = 8;
+
+            var SIClick = SortInventory.GetComponent<InvButton>();
+            SIClick.onButtonPress = new UnityEvent();
+            SIClick.onButtonPress.AddListener(RunSequence);
+            SIClick.isACloseButton = false;
+            SIClick.isSnappable = true;
+            Plugin.Log($"Made all");
+
+            Inventory.inv.buttonsToSnapTo.Add(SortInventory.GetComponent<RectTransform>());
+            Inventory.inv.buttonsToSnapTo.Add(SortChest.GetComponent<RectTransform>());
+            Inventory.inv.buttonsToSnapTo.Add(SendToChests.GetComponent<RectTransform>());
+            initalizedObjects = true;
+            Plugin.Log($"Done");
+
+        }
+
         [HarmonyPrefix]
         public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
             clientInServer = !__instance.isServer;
@@ -171,31 +273,9 @@ namespace TinyResort {
 
         [HarmonyPostfix]
         public static void openInvPostfix() {
-
-            if (!initalizedObjects && ButtonIsReady) {
-                GO = Instantiate(Inventory.inv.walletSlot.transform.parent.gameObject, Inventory.inv.walletSlot.transform.parent.parent, true);
-                
-                Destroy(GO.transform.GetChild(0).gameObject);
-                Destroy(GO.transform.GetChild(1).GetChild(2).gameObject);
-                var Im = GO.transform.GetChild(1).GetComponent<Image>();
-
-                // var rect = GO.GetComponent<RectTransform>();
-                Im.rectTransform.anchoredPosition += new Vector2(190, 0);
-                var textGO = GO.GetComponentsInChildren<TextMeshProUGUI>();
-                textGO[0].enableWordWrapping = false;
-                textGO[0].rectTransform.anchoredPosition += new Vector2(-18, 0);
-                textGO[0].text = "Sort to Chests";
-                
-                var SendToChestButton = GO.AddComponent<UnityEngine.UI.Button>();
-                SendToChestButton.enabled = true;
-                SendToChestButton.onClick.AddListener(RunSequence);
-                //instance.onButtonPress.AddListener(RunSequence);
-               // var buttonGO = Im.gameObject.AddComponent<InvButton>();
-                //buttonGO.gameObject.AddComponent<GraphicRaycaster>();
-               // buttonGO.onButtonPress.AddListener(RunSequence);
-                //buttonGO.onButtonPress.Invoke();
-                initalizedObjects = true;
-            }
+            //  Inventory.inv.buttonsToSnapTo.Add(SortInventory.GetComponent<RectTransform>());
+            //  Inventory.inv.buttonsToSnapTo.Add(SortChest.GetComponent<RectTransform>());
+            //  Inventory.inv.buttonsToSnapTo.Add(SendToChests.GetComponent<RectTransform>());
         }
 
         public static void RunSequence() {
@@ -287,7 +367,7 @@ namespace TinyResort {
                 AddChest(xPos, yPos, house);
             }
         }
-        
+
         public static void ParseAllItems() {
             instance.StopAllCoroutines();
             instance.StartCoroutine(ParseAllItemsRoutine());
@@ -340,7 +420,6 @@ namespace TinyResort {
                 if (HouseManager.manage.allHouses[i].isThePlayersHouse) { playerHouse = HouseManager.manage.allHouses[i]; }
             }
 
-            
             playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
 
             // Gets chests inside houses
@@ -364,7 +443,7 @@ namespace TinyResort {
                     chests.Add((chestComponent, false));
                 }
             }
-            
+
             for (var k = 0; k < chests.Count; k++) {
 
                 var tempX = chests[k].chest.myXPos();
@@ -403,4 +482,5 @@ namespace TinyResort {
             public Chest chest;
         }
     }
+
 }
