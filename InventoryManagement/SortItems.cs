@@ -19,9 +19,6 @@ namespace TinyResort {
             
             ParseAllItems();
             
-            #region InventorySort
-
-            // Inventory will vanish if you try to sort both at the same time.
             if (!ChestWindow.chests.chestWindowOpen || InventoryManagement.alwaysInventory.Value) {
                 inventoryToSort = inventoryToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
                 for (int j = 11; j < Inventory.inv.invSlots.Length; j++) {
@@ -40,11 +37,14 @@ namespace TinyResort {
                 NotificationManager.manage.createChatNotification($"The player's inventory has been sorted.");
             }
 
-            #endregion
+            if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "Sorting chests is disabled in the deep mines."); }
+            SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
+        }
+        
+        public static void SortChest() {
+            
+            ParseAllItems();
 
-            #region ChestSort
-
-           // if (InventoryManagement.disableMod()) return;
             if (ChestWindow.chests.chestWindowOpen && !InventoryManagement.modDisabled) {
                 chestToSort = chestToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
                 for (int i = 0; i < chestToSort.Count; i++) {
@@ -69,7 +69,6 @@ namespace TinyResort {
             if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "Sorting chests is disabled in the deep mines."); }
             SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
 
-            #endregion
         }
 
         public static string getItemType(int itemID) {

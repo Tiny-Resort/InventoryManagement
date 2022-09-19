@@ -67,8 +67,10 @@ namespace TinyResort {
 
         public static GameObject button;
         public static GameObject InventoryMenu;
-        public static GameObject Grid;
+        public static GameObject ChestWindowLayout;
 
+        public static GameObject Grid;
+        
         public static GameObject SendToChests;
         public static GameObject SortInventory;
         public static GameObject SortChest;
@@ -76,16 +78,10 @@ namespace TinyResort {
         public static Vector3 playerPosition;
 
         public static bool LookingForButtons = true;
-
-        public static GameObject GO;
-
-        public static GameObject Test1;
-
+        
         public void Awake() {
             instance = this;
-
-            //TRDrawing.Instantiate("MapCanvas/MenuScreen/CornerStuff/CreditsButton");
-
+            
             Plugin = TRTools.Initialize(this, 50);
 
             #region Configuration
@@ -137,7 +133,6 @@ namespace TinyResort {
             #region Patching
 
             Plugin.QuickPatch(typeof(RealWorldTimeLight), "Update", typeof(InventoryManagement), "updateRWTLPrefix");
-            Plugin.QuickPatch(typeof(CurrencyWindows), "openInv", typeof(InventoryManagement), null, "openInvPostfix");
             Plugin.QuickPatch(typeof(ContainerManager), "UserCode_TargetOpenChest", typeof(InventoryManagement), null, "UserCode_TargetOpenChestPostfix");
             Plugin.QuickPatch(typeof(ChestWindow), "openChestInWindow", typeof(InventoryManagement), "openChestInWindowPrefix");
 
@@ -152,28 +147,15 @@ namespace TinyResort {
 
         }
 
-        private void Update() {
-            if (WorldManager.manageWorld && LookingForButtons) {
-                // LookingForButtons = !LookForButtons();
-                //if (!LookingForButtons) 
-                CreateButtons();
-                LookingForButtons = false;
-            }
-            if (Test1) { Plugin.Log($"Test Info: {Test1.name}"); } 
+        private void Start() {
+            CreateButtons();
         }
-
-        /*public static bool LookForButtons() {
-            if (!button)  button = GameObject.Find("MapCanvas/MenuScreen/CornerStuff/CreditsButton");
-            if (!InventoryMenu) InventoryMenu = GameObject.Find("Canvas/Menu");
-            if (button && InventoryMenu) return true;
-            else return false;
-        }*/
-
+        
         public static void CreateButtons() {
 
-            InventoryMenu = TRDrawing.FindObject("Canvas/Menu");
-
-            Plugin.Log($"Menu? : {InventoryMenu.name}");
+            InventoryMenu = TRDrawing.CopyObject("Canvas/Menu");
+            ChestWindowLayout = TRDrawing.CopyObject("Canvas/ChestWindow/Contents");
+            
             Grid = new GameObject();
             Grid.name = "Inventory Management Grid";
             Grid.transform.SetParent(InventoryMenu.transform);
@@ -191,60 +173,20 @@ namespace TinyResort {
             rect.anchorMax = new Vector2(0.5f, 1);
             rect.anchorMin = new Vector2(0.5f, 1);
             rect.localScale = Vector3.one;
-            rect.anchoredPosition = new Vector2(-179, -475);
+            rect.anchoredPosition = new Vector2(-210, -475);
 
-            Plugin.Log($"Is Button Ready? {button}");
 
             string ButtonLocation = "MapCanvas/MenuScreen/CornerStuff/CreditsButton";
 
-            SendToChests = TRDrawing.AddButton(ButtonLocation, Grid, "Send To Chests", "Send to Chests", 8, RunSequence);
-            /*SendToChests = TRDrawing.InstantiateObject("MapCanvas/MenuScreen/CornerStuff/CreditsButton", Grid);
+            SendToChests = TRDrawing.CreateButton(ButtonLocation, Grid,  "Send to Chests", 8, RunSequence);
+            SortInventory = TRDrawing.CreateButton(ButtonLocation, Grid, "Sort\nBag", 8, SortItems.SortInventory);
 
-            SendToChests.name = "Send To Chests";
-            var STCText = SendToChests.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
-            STCText.text = "Send to Chests";
-            STCText.fontSize = 8;*/
+            SortChest = TRDrawing.CreateButton(ButtonLocation, ChestWindowLayout, "Sort\nChest", 10, SortItems.SortChest);
+            var SortChestRect = SortChest.GetComponent<RectTransform>();
+            SortChestRect.anchoredPosition = new Vector2(155, 167);
+            SortChestRect.sizeDelta = new Vector2(75, 38);
 
-            //var STCClick = SendToChests.GetComponent<InvButton>();
-            //var STCClick = TRDrawing.AddButton(SendToChests, RunSequence);
-            
-            /*STCClick.onButtonPress = new UnityEvent();
-            STCClick.onButtonPress.AddListener(RunSequence);
-            STCClick.isACloseButton = false;
-            STCClick.isSnappable = true;*/
-
-            SortChest = TRDrawing.InstantiateObject("MapCanvas/MenuScreen/CornerStuff/CreditsButton", Grid); 
-            SortChest.name = "Sort Chest";
-            var SCText = SortChest.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
-            SCText.text = "Sort\nChest";
-            SCText.fontSize = 8;
-
-            var SCClick = SortChest.GetComponent<InvButton>();
-            SCClick.onButtonPress = new UnityEvent();
-            SCClick.onButtonPress.AddListener(RunSequence);
-            SCClick.isACloseButton = false;
-            SCClick.isSnappable = true;
-
-            
-            SortInventory = TRDrawing.InstantiateObject("MapCanvas/MenuScreen/CornerStuff/CreditsButton", Grid);
-            SortInventory.name = "Sort Inventory";
-            var SIText = SortInventory.transform.GetChild(0).GetComponent<TextMeshProUGUI>();
-            SIText.text = "Sort\nBag";
-            SIText.fontSize = 8;
-
-            var SIClick = SortInventory.GetComponent<InvButton>();
-            SIClick.onButtonPress = new UnityEvent();
-            SIClick.onButtonPress.AddListener(RunSequence);
-            SIClick.isACloseButton = false;
-            SIClick.isSnappable = true;
-            Plugin.Log($"Made all");
-
-            Inventory.inv.buttonsToSnapTo.Add(SortInventory.GetComponent<RectTransform>());
-            Inventory.inv.buttonsToSnapTo.Add(SortChest.GetComponent<RectTransform>());
-            Inventory.inv.buttonsToSnapTo.Add(SendToChests.GetComponent<RectTransform>());
             initalizedObjects = true;
-            Plugin.Log($"Done");
-
         }
 
         [HarmonyPrefix]
@@ -270,14 +212,7 @@ namespace TinyResort {
                 }
             }
         }
-
-        [HarmonyPostfix]
-        public static void openInvPostfix() {
-            //  Inventory.inv.buttonsToSnapTo.Add(SortInventory.GetComponent<RectTransform>());
-            //  Inventory.inv.buttonsToSnapTo.Add(SortChest.GetComponent<RectTransform>());
-            //  Inventory.inv.buttonsToSnapTo.Add(SendToChests.GetComponent<RectTransform>());
-        }
-
+        
         public static void RunSequence() {
             OnFinishedParsing = () => UpdateAllItems();
             ParseAllItems();
