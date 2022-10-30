@@ -70,7 +70,7 @@ namespace TinyResort {
             // Get all items in nearby chests
             foreach (var ChestInfo in nearbyChests) {
                 for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
-                    if (ChestInfo.chest.itemIds[i] != -1 && TRItems.DoesItemExist(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
+                    if (ChestInfo.chest.itemIds[i] != -1 && TRItems.GetItemDetails(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
                 }
             }
             InventoryManagement.findingNearbyChests = false;

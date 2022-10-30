@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using BepInEx;
@@ -12,15 +13,15 @@ using UnityEngine.UI;
 // TODO: Add the ability to send specific items to nearest chest by some key combination
 // TODO: Update method to use .sav rather than config file
 // TODO: Add a highlight on new items obtianed since last opening inventory. Will need to remove the items if you sort to chests automatically without opening first
-// TODO: Add button to send all items to chests
 
 namespace TinyResort {
 
     [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
+    [BepInDependency("dev.TinyResort.TRTools")]
     public class InventoryManagement : BaseUnityPlugin {
 
         public static TRPlugin Plugin;
-        public const string pluginGuid = "tinyresort.dinkum.InventoryManagement";
+        public const string pluginGuid = "dev.TinyResort.InventoryManagement";
         public const string pluginName = "Inventory Management";
         public const string pluginVersion = "0.8.3";
         private static InventoryManagement instance;
@@ -31,16 +32,19 @@ namespace TinyResort {
         public static ConfigEntry<int> radius;
         public static ConfigEntry<bool> ignoreHotbar;
         public static ConfigEntry<string> ignoreSpecifcSlots;
+        
+        // Keybinds. Leaving in so people have the option to use them instead of the buttons.
         public static ConfigEntry<KeyCode> exportKeybind;
         public static ConfigEntry<KeyCode> exportControllerKeybind;
         public static ConfigEntry<KeyCode> lockSlotKeybind;
         public static ConfigEntry<KeyCode> lockSlotControllerKeybind;
-
-        public static ConfigEntry<string> sortingOrder;
         public static ConfigEntry<KeyCode> sortKeybind;
         public static ConfigEntry<KeyCode> sortControllerKeybind;
+        
+        // Sorting order. This can be modified by the user in the configuration file.
+        public static ConfigEntry<string> sortingOrder;
 
-        public static ConfigEntry<bool> alwaysInventory;
+        
         public static ConfigEntry<float> warnPercentage;
         public static ConfigEntry<float> swapPercentage;
         public static ConfigEntry<bool> doSwapTools;
@@ -65,42 +69,32 @@ namespace TinyResort {
 
         public static bool modDisabled => RealWorldTimeLight.time.underGround;
 
-        public static GameObject button;
-        public static GameObject InventoryMenu;
-        public static GameObject ChestWindowLayout;
-
-        public static GameObject Grid;
-        
-        public static GameObject SendToChests;
-        public static GameObject SortInventory;
-        public static GameObject SortChest;
 
         public static Vector3 playerPosition;
+        public static TRModData modData;
+        public static TRCustomItem couch;
 
-        public static bool LookingForButtons = true;
-        
         public void Awake() {
             instance = this;
-            
+
             Plugin = TRTools.Initialize(this, 50);
+            modData = TRData.Subscribe(pluginGuid);
 
             #region Configuration
 
             radius = Config.Bind<int>("General", "Range", 30, "Increases the range it looks for storage containers by an approximate tile count.");
             ignoreHotbar = Config.Bind<bool>("General", "IgnoreHotbar", true, "Set to true to disable auto importing from the hotbar.");
             ignoreSpecifcSlots = Config.Bind<string>("DO NOT EDIT", "IgnoreSpecificSlots", "", "DO NOT EDIT.");
-            exportKeybind = Config.Bind<KeyCode>("Keybinds", "SortToChestKeybind", KeyCode.KeypadDivide, "Unity KeyCode used for sending inventory items into storage chests.");
+            exportKeybind = Config.Bind<KeyCode>("Keybinds", "SortToChestKeybind", KeyCode.None, "Unity KeyCode used for sending inventory items into storage chests.");
             exportControllerKeybind = Config.Bind<KeyCode>("Keybinds", "SortToChestKeybind", KeyCode.None, "Unity KeyCode used for sending inventory items into storage chests.");
 
-            lockSlotKeybind = Config.Bind<KeyCode>("Keybinds", "LockSlot", KeyCode.LeftAlt, "Unity KeyCode used for locking inventory slots. Use this key in combination with the left mouse button to lock the slots.");
+            lockSlotKeybind = Config.Bind<KeyCode>("Keybinds", "LockSlot", KeyCode.None, "Unity KeyCode used for locking inventory slots. Use this key in combination with the left mouse button to lock the slots.");
             lockSlotControllerKeybind = Config.Bind<KeyCode>("Keybinds", "LockSlot", KeyCode.None, "Unity KeyCode used for locking inventory slots. Use this key in combination with the left mouse button to lock the slots.");
 
             sortingOrder = Config.Bind<string>("SortingOrder", "SortOrder", "relics,bugsorfish,clothes,vehicles,placeables,base,tools,food", "Order to sort inventory and chest items.");
-            sortKeybind = Config.Bind<KeyCode>("Keybinds", "SortInventoryOrChests", KeyCode.KeypadMultiply, "Unity KeyCode used for sorting player and chest inventories.");
+            sortKeybind = Config.Bind<KeyCode>("Keybinds", "SortInventoryOrChests", KeyCode.None, "Unity KeyCode used for sorting player and chest inventories.");
             sortControllerKeybind = Config.Bind<KeyCode>("Keybinds", "SortInventoryOrChests", KeyCode.None, "Unity KeyCode used for sorting player and chest inventories.");
-
-            alwaysInventory = Config.Bind<bool>("SortingOrder", "AlwaysSortPlayerInventory", false, "Set to true if you would like the keybind to sort player inventory and chests while a chest window is open. By default, it will only sort the chest.");
-
+            
             warnPercentage = Config.Bind<float>("Tools", "WarnPercentage", 5, "Set the percentage of remaining durability for the notification to warn you.");
             swapPercentage = Config.Bind<float>("Tools", "SwapPercentage", 2, "Set the percentage of remaining durability you want it to automatically swap tools.");
             doSwapTools = Config.Bind<bool>("Tools", "SwapTools", true, "Set to false if you want to disable the automatic swapping of tools.");
@@ -119,15 +113,13 @@ namespace TinyResort {
                     LockSlots.lockedSlots.Add(tmpInt);
                 }
             }
+
+            // TODO: Remove this and make sort button a rotation between options. 
             string[] tmpSort = sortingOrder.Value.Trim().ToLower().Split(',');
             for (var i = 0; i < tmpSort.Length; i++) {
-                Plugin.Log($"tempSort List: {tmpSort[i]}");
                 SortItems.typeOrder[tmpSort[i]] = i;
             }
-            foreach (var element in SortItems.typeOrder) { Plugin.Log($"Key: {element.Key} | Value: {element.Value}"); }
-
-            initalizedObjects = false;
-
+            
             #endregion
 
             #region Patching
@@ -144,64 +136,15 @@ namespace TinyResort {
             Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
 
             #endregion
-
+           
+            //Plugin.AddConflictingPlugin("tinyresort.dinkum.InventoryManagement");
         }
 
-        private void Start() {
-            CreateButtons();
-        }
-        
-        public static void CreateButtons() {
+        private void Start() { LockSlots.LoadLockedSlots(); }
 
-            InventoryMenu = TRDrawing.CopyObject("Canvas/Menu");
-            ChestWindowLayout = TRDrawing.CopyObject("Canvas/ChestWindow/Contents");
-            
-            Grid = new GameObject();
-            Grid.name = "Inventory Management Grid";
-            Grid.transform.SetParent(InventoryMenu.transform);
-            Grid.transform.SetAsLastSibling();
-            var gridLayoutGroup = Grid.AddComponent<GridLayoutGroup>();
-
-            gridLayoutGroup.cellSize = new Vector2(52, 30);
-            gridLayoutGroup.spacing = new Vector2(8, 2);
-            gridLayoutGroup.childAlignment = TextAnchor.UpperCenter;
-            gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            gridLayoutGroup.constraintCount = 3;
-
-            var rect = Grid.GetComponent<RectTransform>();
-            rect.pivot = new Vector2(0.5f, 1);
-            rect.anchorMax = new Vector2(0.5f, 1);
-            rect.anchorMin = new Vector2(0.5f, 1);
-            rect.localScale = Vector3.one;
-            rect.anchoredPosition = new Vector2(-210, -475);
-
-
-            string ButtonLocation = "MapCanvas/MenuScreen/CornerStuff/CreditsButton";
-
-            SendToChests = TRDrawing.CreateButton(ButtonLocation, Grid,  "Send to Chests", 8, RunSequence);
-            SortInventory = TRDrawing.CreateButton(ButtonLocation, Grid, "Sort\nBag", 8, SortItems.SortInventory);
-
-            SortChest = TRDrawing.CreateButton(ButtonLocation, ChestWindowLayout, "Sort\nChest", 10, SortItems.SortChest);
-            var SortChestRect = SortChest.GetComponent<RectTransform>();
-            SortChestRect.anchoredPosition = new Vector2(155, 167);
-            SortChestRect.sizeDelta = new Vector2(75, 38);
-
-            initalizedObjects = true;
-        }
-
-        [HarmonyPrefix]
-        public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
-            clientInServer = !__instance.isServer;
-
-            if (Input.GetKeyDown(exportKeybind.Value) || Input.GetKeyDown(exportControllerKeybind.Value)) {
-                if (!modDisabled) {
-                    RunSequence();
-                    totalDeposited = 0;
-                }
-                else
-                    TRTools.TopNotification("Inventory Management", "Send items to chests is disabled in the mines/playerhouse.");
-            }
-            if (Input.GetKeyDown(sortKeybind.Value) || Input.GetKeyDown(sortControllerKeybind.Value)) { SortItems.SortInventory(); }
+        public void Update() {
+            if (NetworkMapSharer.share.localChar && !CreateButtons.InventoryMenu) { CreateButtons.CreateInventoryButtons(); }
+            if (NetworkMapSharer.share.localChar && !CreateButtons.ChestWindowLayout) { CreateButtons.CreateChestButtons(); }
         }
 
         public void LateUpdate() {
@@ -212,13 +155,26 @@ namespace TinyResort {
                 }
             }
         }
-        
-        public static void RunSequence() {
-            OnFinishedParsing = () => UpdateAllItems();
-            ParseAllItems();
-            totalDeposited = 0;
-        }
 
+        // If people still want to use the hotkeys
+        [HarmonyPrefix] public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
+            clientInServer = !__instance.isServer;
+
+            if (Input.GetKeyDown(KeyCode.F8)) {
+                TRMail.SendItemInMail(couch, 5, true);
+            }
+            
+            if (Input.GetKeyDown(exportKeybind.Value) || Input.GetKeyDown(exportControllerKeybind.Value)) {
+                if (!modDisabled) {
+                    SortItems.SortToChests();
+                    totalDeposited = 0;
+                }
+                else
+                    TRTools.TopNotification("Inventory Management", "Send items to chests is disabled in the mines/playerhouse.");
+            }
+            if (Input.GetKeyDown(sortKeybind.Value) || Input.GetKeyDown(sortControllerKeybind.Value)) { SortItems.SortInventory(); }
+        }
+       
         public static int GetItemCount(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info.quantity : 0;
 
         public static ItemInfo GetItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
@@ -320,7 +276,7 @@ namespace TinyResort {
             // Get all items in nearby chests
             foreach (var ChestInfo in nearbyChests) {
                 for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++) {
-                    if (ChestInfo.chest.itemIds[i] != -1 && TRItems.DoesItemExist(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
+                    if (ChestInfo.chest.itemIds[i] != -1 && TRItems.GetItemDetails(ChestInfo.chest.itemIds[i])) { AddItem(ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i, TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house, ChestInfo.chest); }
                 }
             }
             findingNearbyChests = false;

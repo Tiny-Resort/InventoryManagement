@@ -28,10 +28,15 @@ namespace TinyResort {
         public static bool checkIfLocking;
         public static Color defaultColor = Color.white;
 
+        public static void LoadLockedSlots() { LockSlots.lockedSlots = (List<int>)InventoryManagement.modData.GetValue("lockedSlots", new List<int>()); }
 
+        public static void SaveLockedSlots() {
+            InventoryManagement.modData.SetValue("lockedSlots", LockSlots.lockedSlots);
+            InventoryManagement.modData.Save();
+        }
         
         public static bool moveCursorPrefix(Inventory __instance) {
-            if (InputMaster.input.UISelect()) {
+            if (InputMaster.input.UISelect() && NetworkMapSharer.share.localChar) {
                 if (Input.GetKey(InventoryManagement.lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
                     if (slot != null) {
@@ -52,13 +57,9 @@ namespace TinyResort {
                         }
                     }
                     checkIfLocking = true;
+                    SaveLockedSlots();
                 }
-                InventoryManagement.ignoreSpecifcSlots.Value = null;
-                foreach (var element in lockedSlots) {
-                    var tempString = InventoryManagement.ignoreSpecifcSlots == null ? element + "," : InventoryManagement.ignoreSpecifcSlots.Value + element + ",";
-                    InventoryManagement.ignoreSpecifcSlots.Value = tempString;
-                }
-                InventoryManagement.ignoreSpecifcSlots.ConfigFile.Save();
+                
                 for (int i = 0; i < Inventory.inv.invSlots.Length; i++) {
                     if (lockedSlots.Contains(i)) { Inventory.inv.invSlots[i].GetComponent<Image>().color = LockedSlotColor; }
                 }
