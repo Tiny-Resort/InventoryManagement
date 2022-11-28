@@ -3,7 +3,7 @@ using UnityEngine.UI;
 
 namespace TinyResort;
 
-public class CreateButtons {
+internal class CreateButtons {
 
     public static GameObject InventoryMenu;
     public static GameObject ChestWindowLayout;

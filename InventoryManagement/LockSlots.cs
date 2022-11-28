@@ -18,20 +18,19 @@ using UnityEngine.UI;
 
 namespace TinyResort {
 
-    public class LockSlots {
+    internal class LockSlots {
+        
+        internal static List<int> lockedSlots = new List<int>();
+        internal static Color LockedSlotColor = new Color(.5f, .5f, .5f, 1f);
 
+        internal static int tempCurrentIgnore;
+        internal static bool checkIfLocking;
+        internal static Color defaultColor = Color.white;
 
-        public static List<int> lockedSlots = new List<int>();
-        public static Color LockedSlotColor = new Color(.5f, .5f, .5f, 1f);
+        internal static void LoadLockedSlots() { lockedSlots = (List<int>)InventoryManagement.modData.GetValue("lockedSlots", new List<int>()); }
 
-        public static int tempCurrentIgnore;
-        public static bool checkIfLocking;
-        public static Color defaultColor = Color.white;
-
-        public static void LoadLockedSlots() { LockSlots.lockedSlots = (List<int>)InventoryManagement.modData.GetValue("lockedSlots", new List<int>()); }
-
-        public static void SaveLockedSlots() {
-            InventoryManagement.modData.SetValue("lockedSlots", LockSlots.lockedSlots);
+        internal static void SaveLockedSlots() {
+            InventoryManagement.modData.SetValue("lockedSlots", lockedSlots); 
             InventoryManagement.modData.Save();
         }
         
@@ -40,13 +39,9 @@ namespace TinyResort {
                 if (Input.GetKey(InventoryManagement.lockSlotKeybind.Value) && Input.GetMouseButtonDown(0)) { // Update to use different key combination so you can do it while not picking up item?
                     InventorySlot slot = __instance.cursorPress();
                     if (slot != null) {
-                        InventoryManagement.Plugin.Log($"Slot: {slot.transform.parent.gameObject.name}");
                         if (slot.transform.parent.gameObject.name == "InventoryWindows") { tempCurrentIgnore = slot.transform.GetSiblingIndex() + 11; }
                         else if (slot.transform.parent.gameObject.name == "QuickSlotBar") { tempCurrentIgnore = slot.transform.GetSiblingIndex(); }
-                        else {
-                            Debug.Log($"Mouse Click On Button: {slot.transform.parent.gameObject.name}");
-                            tempCurrentIgnore = -1;
-                        }
+                        else { tempCurrentIgnore = -1; }
                         if (tempCurrentIgnore != -1 && lockedSlots.Contains(tempCurrentIgnore)) {
                             lockedSlots.Remove(tempCurrentIgnore);
                             slot.slotBackgroundImage.color = defaultColor;

@@ -18,7 +18,7 @@ using UnityEngine.UI;
 
 namespace TinyResort {
 
-    public class LocateItem : MonoBehaviour {
+    internal class LocateItem : MonoBehaviour {
 
         private static LocateItem instance;
         private static Dictionary<(int xPos, int yPos), HouseDetails> unconfirmedChests = new Dictionary<(int xPos, int yPos), HouseDetails>();

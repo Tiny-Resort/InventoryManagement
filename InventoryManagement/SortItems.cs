@@ -4,18 +4,17 @@ using System.Linq;
 namespace TinyResort {
 
     // TODO: Add ability to sort by various parameters
-    // TODO: Add sort button in inventory and chest windows
-    public class SortItems {
+    internal class SortItems {
 
-        public static List<InventoryItems> inventoryToSort = new List<InventoryItems>();
-        public static List<ChestItems> chestToSort = new List<ChestItems>();
-        public static Dictionary<string, int> typeOrder = new Dictionary<string, int>();
-        public static int currentChestX;
-        public static int currentChestY;
-        public static HouseDetails currentChestHouseDetails;
-        public static Chest currentChest;
+        internal static List<InventoryItems> inventoryToSort = new List<InventoryItems>();
+        internal static List<ChestItems> chestToSort = new List<ChestItems>();
+        internal static Dictionary<string, int> typeOrder = new Dictionary<string, int>();
+        internal static int currentChestX;
+        internal static int currentChestY;
+        internal static HouseDetails currentChestHouseDetails;
+        internal static Chest currentChest;
 
-        public static void SortInventory() {
+        internal static void SortInventory() {
 
             ParseAllItems();
 
@@ -39,7 +38,7 @@ namespace TinyResort {
             SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
         }
 
-        public static void SortChest() {
+        internal static void SortChest() {
 
             ParseAllItems();
 
@@ -71,14 +70,13 @@ namespace TinyResort {
 
         }
 
-        public static void SortToChests() {
-            InventoryManagement.Plugin.LogError($"Sorting to Chests");
+        internal static void SortToChests() {
             InventoryManagement.OnFinishedParsing = () => InventoryManagement.UpdateAllItems();
             InventoryManagement.ParseAllItems();
             InventoryManagement.totalDeposited = 0;
         }
-        
-        public static string getItemType(int itemID) {
+
+        internal static string getItemType(int itemID) {
             InventoryItem currentItem = Inventory.inv.allItems[itemID];
             if (currentItem.spawnPlaceable) {
                 if (currentItem.spawnPlaceable.GetComponent<Vehicle>()) { return "vehicles"; }
@@ -98,7 +96,7 @@ namespace TinyResort {
             return "base";
         }
 
-        public static void AddInventoryItem(int itemID, int quantity, bool isStackable, bool hasFuel, int value) {
+        internal static void AddInventoryItem(int itemID, int quantity, bool isStackable, bool hasFuel, int value) {
             if (inventoryToSort.Any(i => i.itemID == itemID) && Inventory.inv.allItems[itemID].checkIfStackable()) {
                 var tmpInventoryItem = inventoryToSort.Find(i => i.itemID == itemID);
                 tmpInventoryItem.quantity += quantity;
@@ -121,7 +119,7 @@ namespace TinyResort {
             }
         }
 
-        public static int checkSortOrder(string prefabName) {
+        internal static int checkSortOrder(string prefabName) {
             int tmpInt = 10000;
 
             switch (prefabName) {
@@ -264,7 +262,7 @@ namespace TinyResort {
             return tmpInt;
         }
 
-        public static void AddChestItem(int itemID, int quantity, bool isStackable, bool hasFuel, HouseDetails isInHouse, int value) {
+        internal static void AddChestItem(int itemID, int quantity, bool isStackable, bool hasFuel, HouseDetails isInHouse, int value) {
             if (chestToSort.Any(i => i.itemID == itemID) && Inventory.inv.allItems[itemID].checkIfStackable()) {
                 var tempChestItem = chestToSort.Find(i => i.itemID == itemID);
                 tempChestItem.quantity += quantity;
@@ -288,8 +286,7 @@ namespace TinyResort {
             }
         }
 
-        public static void ParseAllItems() {
-            InventoryManagement.Plugin.LogError($"Parsing all items");
+        internal static void ParseAllItems() {
             inventoryToSort.Clear();
             chestToSort.Clear();
             currentChest = null;
@@ -304,8 +301,6 @@ namespace TinyResort {
             }
 
             if (ChestWindow.chests.chestWindowOpen && !InventoryManagement.modDisabled) {
-                InventoryManagement.Plugin.LogError($"Chest Window is Open and not disabled");
-
                 currentChestHouseDetails = NetworkMapSharer.share.localChar.myInteract.insideHouseDetails == null ? null : NetworkMapSharer.share.localChar.myInteract.insideHouseDetails;
                 for (int i = 0; i < ContainerManager.manage.activeChests.Count; i++) {
                     if (NetworkMapSharer.share.localChar.myInteract.selectedTile.x == ContainerManager.manage.activeChests[i].xPos
@@ -328,31 +323,31 @@ namespace TinyResort {
         }
     }
 
-    public class InventoryItems {
-        public int itemID;
-        public int slotID;
-        public int sortID;
-        public int quantity;
-        public int fuel;
-        public bool hasFuel;
-        public bool isStackable;
-        public int invTypeOrder;
-        public string itemType;
-        public int value;
+    internal class InventoryItems {
+        internal int itemID;
+        internal int slotID;
+        internal int sortID;
+        internal int quantity;
+        internal int fuel;
+        internal bool hasFuel;
+        internal bool isStackable;
+        internal int invTypeOrder;
+        internal string itemType;
+        internal int value;
     }
 
-    public class ChestItems {
-        public int itemID;
-        public int slotID;
-        public int sortID;
-        public int quantity;
-        public int fuel;
-        public bool hasFuel;
-        public bool isStackable;
-        public int invTypeOrder;
-        public string itemType;
-        public int value;
-        public HouseDetails inPlayerHouse;
+    internal class ChestItems {
+        internal int itemID;
+        internal int slotID;
+        internal int sortID;
+        internal int quantity;
+        internal int fuel;
+        internal bool hasFuel;
+        internal bool isStackable;
+        internal int invTypeOrder;
+        internal string itemType;
+        internal int value;
+        internal HouseDetails inPlayerHouse;
     }
 
 }
