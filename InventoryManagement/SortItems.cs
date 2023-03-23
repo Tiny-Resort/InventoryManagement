@@ -68,7 +68,7 @@ namespace TinyResort {
             if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "Sorting chests is disabled in the deep mines."); }
             SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
 
-        }
+        } 
 
         internal static void SortToChests() {
             InventoryManagement.OnFinishedParsing = () => InventoryManagement.UpdateAllItems();
@@ -122,7 +122,7 @@ namespace TinyResort {
         internal static int checkSortOrder(string prefabName) {
             int tmpInt = 10000;
 
-            switch (prefabName) {
+            switch (prefabName) { 
                 case "PickAxe":
                     tmpInt = 0;
                     break;

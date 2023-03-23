@@ -178,14 +178,14 @@ public class InventoryManagement : BaseUnityPlugin {
 
         #endregion
 
-        var fence = Plugin.AddCustomItem("custom_assets/custom_items/customfence", 1);
-        Plugin.AddCustomItem("custom_assets/custom_items/custompath", 2);
+        //var fence = Plugin.AddCustomItem("custom_assets/custom_items/customfence", 1);
+        //Plugin.AddCustomItem("custom_assets/custom_items/custompath", 2);
+        //TRTools.sceneSetupEvent += CreateHotkeyButtons;
 
         //Plugin.AddConflictingPlugin("tinyresort.dinkum.InventoryManagement");
     }
-
+    
     public void Update() {
-
         if (NetworkMapSharer.share.localChar && !CreateButtons.InventoryMenu) CreateButtons.CreateInventoryButtons();
         if (NetworkMapSharer.share.localChar && !CreateButtons.ChestWindowLayout) CreateButtons.CreateChestButtons();
     }
@@ -232,55 +232,56 @@ public class InventoryManagement : BaseUnityPlugin {
     public static void UpdateAllItems() {
         var startingPoint = ignoreHotbar.Value ? 11 : 0;
 
-        for (var i = startingPoint; i < Inventory.inv.invSlots.Length; i++)
-            if (!LockSlots.lockedSlots.Contains(i)) {
-                var invItemId = Inventory.inv.invSlots[i].itemNo;
-                if (invItemId != -1) {
-                    var amountToAdd = Inventory.inv.invSlots[i].stack;
-                    var hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
-                    var isStackable = Inventory.inv.invSlots[i].itemInSlot.isStackable;
-                    var info = GetItem(invItemId);
+        for (var i = startingPoint; i < Inventory.inv.invSlots.Length; i++) {
+            if (LockSlots.lockedSlots.Contains(i)) return;
+            if (Inventory.inv.invSlots[i].itemNo == -1) return;
+            if (GetItem(Inventory.inv.invSlots[i].itemNo) == null) return;
+            
+            var invItemId = Inventory.inv.invSlots[i].itemNo;
+            var amountToAdd = Inventory.inv.invSlots[i].stack;
+            var hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
+            var isStackable = Inventory.inv.invSlots[i].itemInSlot.isStackable;
+            var info = GetItem(invItemId);
 
-                    // Stops if we don't have the item stored in a chest
-                    if (info != null)
-                        for (var d = 0; d < info.sources.Count; d++) {
+            // Stops if we don't have the item stored in a chest
+            for (var d = 0; d < info.sources.Count; d++) { 
 
-                            var slotToUse = 998;
-                            var tmpFirstEmptySlot = checkForEmptySlot(info.sources[d].chest);
-                            if ((hasFuel || !isStackable) && tmpFirstEmptySlot != 999)
-                                slotToUse = tmpFirstEmptySlot;
-                            else if ((hasFuel || !isStackable) && tmpFirstEmptySlot == 999)
-                                slotToUse = tmpFirstEmptySlot;
-                            else if (isStackable) slotToUse = info.sources[d].slotID;
-                            info.sources[d].quantity =
-                                !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd;
-                            if (slotToUse != 999) {
-                                if (clientInServer)
-                                    NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(
-                                        info.sources[d].chest.xPos,
-                                        info.sources[d].chest.yPos,
-                                        slotToUse,
-                                        invItemId,
-                                        info.sources[d].quantity
-                                    );
-                                else
-                                    ContainerManager.manage.changeSlotInChest(
-                                        info.sources[d].chest.xPos,
-                                        info.sources[d].chest.yPos,
-                                        slotToUse,
-                                        invItemId,
-                                        info.sources[d].quantity,
-                                        info.sources[d].inPlayerHouse
-                                    );
-                                removeFromPlayerInventory(invItemId, i, 0);
-                                totalDeposited++;
-                                break;
-                            }
-                            hasFuel = false;
-                            isStackable = false;
-                        }
+                var slotToUse = 998;
+                var tmpFirstEmptySlot = checkForEmptySlot(info.sources[d].chest);
+                if ((hasFuel || !isStackable) && tmpFirstEmptySlot != 999)
+                    slotToUse = tmpFirstEmptySlot;
+                else if ((hasFuel || !isStackable) && tmpFirstEmptySlot == 999)
+                    slotToUse = tmpFirstEmptySlot;
+                else if (isStackable) slotToUse = info.sources[d].slotID;
+                info.sources[d].quantity =
+                    !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd;
+                
+                if (slotToUse != 999) {
+                    if (clientInServer)
+                        NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(
+                            info.sources[d].chest.xPos,
+                            info.sources[d].chest.yPos,
+                            slotToUse,
+                            invItemId,
+                            info.sources[d].quantity
+                        );
+                    else
+                        ContainerManager.manage.changeSlotInChest(
+                            info.sources[d].chest.xPos,
+                            info.sources[d].chest.yPos,
+                            slotToUse,
+                            invItemId,
+                            info.sources[d].quantity,
+                            info.sources[d].inPlayerHouse
+                        );
+                    removeFromPlayerInventory(invItemId, i, 0);
+                    totalDeposited++;
+                    break;
                 }
+                hasFuel = false;
+                isStackable = false;
             }
+        }
         NotificationManager.manage.createChatNotification($"{totalDeposited} item(s) have been deposited.");
         SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
     }
