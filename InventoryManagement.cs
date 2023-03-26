@@ -20,7 +20,7 @@ public class InventoryManagement : BaseUnityPlugin {
     public delegate void ParsingEvent();
     public const string pluginGuid = "dev.TinyResort.InventoryManagement";
     public const string pluginName = "Inventory Management";
-    public const string pluginVersion = "0.9.0";
+    public const string pluginVersion = "0.8.4";
 
     public static TRPlugin Plugin;
     private static InventoryManagement instance;
@@ -178,8 +178,8 @@ public class InventoryManagement : BaseUnityPlugin {
 
         #endregion
 
-        var fence = Plugin.AddCustomItem("custom_assets/custom_items/customfence", 1);
-        Plugin.AddCustomItem("custom_assets/custom_items/custompath", 2);
+        /*var fence = Plugin.AddCustomItem("custom_assets/custom_items/customfence", 1);
+        Plugin.AddCustomItem("custom_assets/custom_items/custompath", 2);*/
 
         //Plugin.AddConflictingPlugin("tinyresort.dinkum.InventoryManagement");
     }
@@ -228,7 +228,7 @@ public class InventoryManagement : BaseUnityPlugin {
         Inventory.inv.invSlots[slotID]
                  .updateSlotContentsAndRefresh(amountRemaining == 0 ? -1 : itemID, amountRemaining);
     }
-
+    
     public static void UpdateAllItems() {
         var startingPoint = ignoreHotbar.Value ? 11 : 0;
 
