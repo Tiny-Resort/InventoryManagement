@@ -20,7 +20,7 @@ public class InventoryManagement : BaseUnityPlugin {
     public delegate void ParsingEvent();
     public const string pluginGuid = "dev.TinyResort.InventoryManagement";
     public const string pluginName = "Inventory Management";
-    public const string pluginVersion = "0.8.4";
+    public const string pluginVersion = "0.8.5";
 
     public static TRPlugin Plugin;
     private static InventoryManagement instance;
@@ -185,9 +185,8 @@ public class InventoryManagement : BaseUnityPlugin {
     }
 
     public void Update() {
-
-        if (NetworkMapSharer.share.localChar && !CreateButtons.InventoryMenu) CreateButtons.CreateInventoryButtons();
-        if (NetworkMapSharer.share.localChar && !CreateButtons.ChestWindowLayout) CreateButtons.CreateChestButtons();
+        if (NetworkMapSharer.share.localChar && !CreateButtons.InventoryMenu && Inventory.inv.invOpen) { CreateButtons.CreateInventoryButtons(); }
+        if (NetworkMapSharer.share.localChar && !CreateButtons.ChestWindowLayout && ChestWindow.chests.chestWindowOpen) { CreateButtons.CreateChestButtons(); }
     }
 
     public void LateUpdate() {
@@ -202,7 +201,7 @@ public class InventoryManagement : BaseUnityPlugin {
     [HarmonyPrefix] public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
         clientInServer = !__instance.isServer;
 
-        if (Input.GetKeyDown(KeyCode.F8)) TRMail.SendItemInMail(couch, 5, true);
+        //if (Input.GetKeyDown(KeyCode.F8)) TRMail.SendItemInMail(couch, 5, true);
 
         if (Input.GetKeyDown(exportKeybind.Value) || Input.GetKeyDown(exportControllerKeybind.Value)) {
             if (!modDisabled) {
@@ -416,7 +415,7 @@ public class InventoryManagement : BaseUnityPlugin {
     private static void AddChest(int xPos, int yPos, HouseDetails house) {
         nearbyChests.Add((ContainerManager.manage.activeChests.First(i => i.xPos == xPos && i.yPos == yPos), house));
         nearbyChests = nearbyChests.Distinct().ToList();
-    }
+    } 
 
     public class ItemInfo {
         public int quantity;

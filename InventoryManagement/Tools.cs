@@ -34,7 +34,6 @@ namespace TinyResort {
                 for (int i = 0; i < SoundManager.manage.my2DAudios.Length; i++) { InventoryManagement.Plugin.Log($"Sound: {SoundManager.manage.my2DAudios[i].name}"); }
                 warnedPercent = true;
             }
-
             if (percentRemaining <= InventoryManagement.swapPercentage.Value && InventoryManagement.doSwapTools.Value) {
                 currentTool.fuel = nextFuel;
                 currentTool.itemID = __instance.invSlots[__instance.selectedSlot].itemNo;
@@ -43,6 +42,7 @@ namespace TinyResort {
                 if (replacementTools.Count > 0) {
                     Inventory.inv.invSlots[currentTool.slotID].updateSlotContentsAndRefresh(replacementTools[0].itemID, replacementTools[0].fuel);
                     Inventory.inv.invSlots[replacementTools[0].slotID].updateSlotContentsAndRefresh(currentTool.itemID, currentTool.fuel);
+                    Inventory.inv.equipNewSelectedSlot();
                 }
             }
         }
