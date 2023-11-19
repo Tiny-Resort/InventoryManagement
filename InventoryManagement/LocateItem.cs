@@ -106,7 +106,7 @@ namespace TinyResort {
             }
 
             
-            playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
+            playerPosition = NetworkMapSharer.Instance.localChar.myInteract.transform.position;
 
             // Gets chests inside houses
             if (InventoryManagement.ClientInsideHouse || !InventoryManagement.clientInServer) {
@@ -137,8 +137,8 @@ namespace TinyResort {
 
                 if (InventoryManagement.clientInServer) {
                     unconfirmedChests[(tempX, tempY)] = house;
-                    NetworkMapSharer.share.localChar.myPickUp.CmdOpenChest(tempX, tempY);
-                    NetworkMapSharer.share.localChar.CmdCloseChest(tempX, tempY);
+                    NetworkMapSharer.Instance.localChar.myPickUp.CmdOpenChest(tempX, tempY);
+                    NetworkMapSharer.Instance.localChar.CmdCloseChest(tempX, tempY);
                 }
                 else {
                     ContainerManager.manage.checkIfEmpty(tempX, tempY, house);

@@ -19,15 +19,15 @@ namespace TinyResort {
             ParseAllItems();
 
             inventoryToSort = inventoryToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
-            for (int j = 11; j < Inventory.inv.invSlots.Length; j++) {
-                if (!LockSlots.lockedSlots.Contains(j)) { Inventory.inv.invSlots[j].updateSlotContentsAndRefresh(-1, 0); }
+            for (int j = 11; j < Inventory.Instance.invSlots.Length; j++) {
+                if (!LockSlots.lockedSlots.Contains(j)) { Inventory.Instance.invSlots[j].updateSlotContentsAndRefresh(-1, 0); }
             }
             for (int k = 0; k < inventoryToSort.Count; k++) {
-                for (int l = k + 11; l < Inventory.inv.invSlots.Length; l++) {
+                for (int l = k + 11; l < Inventory.Instance.invSlots.Length; l++) {
                     InventoryManagement.Plugin.Log($"Locked SLot?: {l}: {!LockSlots.lockedSlots.Contains(l)}");
-                    if (!LockSlots.lockedSlots.Contains(l) && Inventory.inv.invSlots[l].itemNo == -1) {
-                        if (!inventoryToSort[k].isStackable && inventoryToSort[k].hasFuel) { Inventory.inv.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].fuel); }
-                        else { Inventory.inv.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].quantity); }
+                    if (!LockSlots.lockedSlots.Contains(l) && Inventory.Instance.invSlots[l].itemNo == -1) {
+                        if (!inventoryToSort[k].isStackable && inventoryToSort[k].hasFuel) { Inventory.Instance.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].fuel); }
+                        else { Inventory.Instance.invSlots[l].updateSlotContentsAndRefresh(inventoryToSort[k].itemID, inventoryToSort[k].quantity); }
                         break;
                     }
                 }
@@ -35,7 +35,7 @@ namespace TinyResort {
             NotificationManager.manage.createChatNotification($"The player's inventory has been sorted.");
 
             if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "Sorting chests is disabled in the deep mines."); }
-            SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
+            SoundManager.Instance.play2DSound(SoundManager.Instance.inventorySound);
         }
 
         internal static void SortChest() {
@@ -46,18 +46,18 @@ namespace TinyResort {
                 chestToSort = chestToSort.OrderBy(i => i.invTypeOrder).ThenBy(i => i.sortID).ThenBy(i => i.value).ToList();
                 for (int i = 0; i < chestToSort.Count; i++) {
                     if (chestToSort[i].hasFuel) {
-                        if (InventoryManagement.clientInServer) { NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].fuel); }
+                        if (InventoryManagement.clientInServer) { NetworkMapSharer.Instance.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].fuel); }
                         else
                             ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].fuel, currentChestHouseDetails);
                     }
                     else if (!chestToSort[i].hasFuel) {
-                        if (InventoryManagement.clientInServer) { NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].quantity); }
+                        if (InventoryManagement.clientInServer) { NetworkMapSharer.Instance.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].quantity); }
                         else
                             ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, i, chestToSort[i].itemID, chestToSort[i].quantity, currentChestHouseDetails);
                     }
                     if (chestToSort.Count - 1 == i && i != 23) {
                         for (int j = i + 1; j < 24; j++) {
-                            if (InventoryManagement.clientInServer) { NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, j, -1, 0); }
+                            if (InventoryManagement.clientInServer) { NetworkMapSharer.Instance.localChar.myPickUp.CmdChangeOneInChest(currentChestX, currentChestY, j, -1, 0); }
                             else
                                 ContainerManager.manage.changeSlotInChest(currentChestX, currentChestY, j, -1, 0, currentChestHouseDetails);
                         }
@@ -66,7 +66,7 @@ namespace TinyResort {
                 NotificationManager.manage.createChatNotification($"The chest's inventory has been sorted.");
             }
             if (InventoryManagement.modDisabled) { TRTools.TopNotification("Inventory Management", "Sorting chests is disabled in the deep mines."); }
-            SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
+            SoundManager.Instance.play2DSound(SoundManager.Instance.inventorySound);
 
         }
 
@@ -77,7 +77,7 @@ namespace TinyResort {
         }
 
         internal static string getItemType(int itemID) {
-            InventoryItem currentItem = Inventory.inv.allItems[itemID];
+            InventoryItem currentItem = Inventory.Instance.allItems[itemID];
             if (currentItem.spawnPlaceable) {
                 if (currentItem.spawnPlaceable.GetComponent<Vehicle>()) { return "vehicles"; }
                 return "placeables";
@@ -89,7 +89,8 @@ namespace TinyResort {
                     if (currentItem.relic) { return "relics"; }
                     if (currentItem.equipable && currentItem.equipable.cloths) { return "clothes"; }
                     if (currentItem.consumeable) { return "food"; }
-                    if ((currentItem.placeable && !currentItem.burriedPlaceable) || (currentItem.placeableTileType > -1 && WorldManager.manageWorld.tileTypes[currentItem.placeableTileType].isPath)) { return "placeables"; }
+                    if ((currentItem.placeable && !currentItem.burriedPlaceable) || (currentItem.placeableTileType > -1 && WorldManager.Instance
+                                   .tileTypes[currentItem.placeableTileType].isPath)) { return "placeables"; }
                     if (currentItem.itemChange && currentItem.itemChange.changesAndTheirChanger[0].changesWhenComplete && currentItem.itemChange.changesAndTheirChanger[0].changesWhenComplete.consumeable) { return "food"; }
                 }
             }
@@ -97,7 +98,7 @@ namespace TinyResort {
         }
 
         internal static void AddInventoryItem(int itemID, int quantity, bool isStackable, bool hasFuel, int value) {
-            if (inventoryToSort.Any(i => i.itemID == itemID) && Inventory.inv.allItems[itemID].checkIfStackable()) {
+            if (inventoryToSort.Any(i => i.itemID == itemID) && Inventory.Instance.allItems[itemID].checkIfStackable()) {
                 var tmpInventoryItem = inventoryToSort.Find(i => i.itemID == itemID);
                 tmpInventoryItem.quantity += quantity;
             }
@@ -114,7 +115,7 @@ namespace TinyResort {
                 tempItem.itemType = getItemType(itemID);
                 tempItem.invTypeOrder = typeOrder[tempItem.itemType];
                 tempItem.value = value;
-                tempItem.sortID = checkSortOrder(Inventory.inv.allItems[itemID].itemPrefab.name);
+                tempItem.sortID = checkSortOrder(Inventory.Instance.allItems[itemID].itemPrefab.name);
                 inventoryToSort.Add(tempItem);
             }
         }
@@ -263,7 +264,7 @@ namespace TinyResort {
         }
 
         internal static void AddChestItem(int itemID, int quantity, bool isStackable, bool hasFuel, HouseDetails isInHouse, int value) {
-            if (chestToSort.Any(i => i.itemID == itemID) && Inventory.inv.allItems[itemID].checkIfStackable()) {
+            if (chestToSort.Any(i => i.itemID == itemID) && Inventory.Instance.allItems[itemID].checkIfStackable()) {
                 var tempChestItem = chestToSort.Find(i => i.itemID == itemID);
                 tempChestItem.quantity += quantity;
             }
@@ -281,7 +282,7 @@ namespace TinyResort {
                 tempItem.invTypeOrder = typeOrder[tempItem.itemType];
                 tempItem.inPlayerHouse = isInHouse;
                 tempItem.value = value;
-                tempItem.sortID = checkSortOrder(Inventory.inv.allItems[itemID].itemPrefab.name);
+                tempItem.sortID = checkSortOrder(Inventory.Instance.allItems[itemID].itemPrefab.name);
                 chestToSort.Add(tempItem);
             }
         }
@@ -290,21 +291,22 @@ namespace TinyResort {
             inventoryToSort.Clear();
             chestToSort.Clear();
             currentChest = null;
-            for (var i = 11; i < Inventory.inv.invSlots.Length; i++) {
-                if (!LockSlots.lockedSlots.Contains(i) && Inventory.inv.invSlots[i].itemNo != -1 && TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo)) {
+            for (var i = 11; i < Inventory.Instance.invSlots.Length; i++) {
+                if (!LockSlots.lockedSlots.Contains(i) && Inventory.Instance.invSlots[i].itemNo != -1 && TRItems.GetItemDetails(Inventory.Instance.invSlots[i].itemNo)) {
                     AddInventoryItem(
-                        Inventory.inv.invSlots[i].itemNo, Inventory.inv.invSlots[i].stack, 
-                        TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).checkIfStackable(), 
-                        TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).hasFuel, 
-                        TRItems.GetItemDetails(Inventory.inv.invSlots[i].itemNo).value);
+                        Inventory.Instance.invSlots[i].itemNo, Inventory.Instance.invSlots[i].stack, 
+                        TRItems.GetItemDetails(Inventory.Instance.invSlots[i].itemNo).checkIfStackable(), 
+                        TRItems.GetItemDetails(Inventory.Instance.invSlots[i].itemNo).hasFuel, 
+                        TRItems.GetItemDetails(Inventory.Instance.invSlots[i].itemNo).value);
                 }
             }
 
             if (ChestWindow.chests.chestWindowOpen && !InventoryManagement.modDisabled) {
-                currentChestHouseDetails = NetworkMapSharer.share.localChar.myInteract.insideHouseDetails == null ? null : NetworkMapSharer.share.localChar.myInteract.insideHouseDetails;
+                currentChestHouseDetails = NetworkMapSharer.Instance.localChar.myInteract.InsideHouseDetails == null ? null : NetworkMapSharer.Instance
+                                              .localChar.myInteract.InsideHouseDetails;
                 for (int i = 0; i < ContainerManager.manage.activeChests.Count; i++) {
-                    if (NetworkMapSharer.share.localChar.myInteract.selectedTile.x == ContainerManager.manage.activeChests[i].xPos
-                     && NetworkMapSharer.share.localChar.myInteract.selectedTile.y == ContainerManager.manage.activeChests[i].yPos) {
+                    if (NetworkMapSharer.Instance.localChar.myInteract.selectedTile.x == ContainerManager.manage.activeChests[i].xPos
+                     && NetworkMapSharer.Instance.localChar.myInteract.selectedTile.y == ContainerManager.manage.activeChests[i].yPos) {
                         currentChest = ContainerManager.manage.activeChests[i];
                         currentChestX = ContainerManager.manage.activeChests[i].xPos;
                         currentChestY = ContainerManager.manage.activeChests[i].yPos;

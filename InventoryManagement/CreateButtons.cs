@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using HarmonyLib;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace TinyResort;
@@ -11,6 +12,8 @@ internal class CreateButtons {
     public static TRButton SendToChests;
     public static TRButton SortInventory;
     public static TRButton SortChest;
+    public static GridLayoutGroup gridLayoutGroup;
+    public static RectTransform rect;
 
     public static void CreateInventoryButtons() {
         InventoryMenu = GameObject.Find("Canvas/Menu");
@@ -19,15 +22,16 @@ internal class CreateButtons {
         try { Grid.transform.SetParent(InventoryMenu.transform); }
         catch { return; }
         Grid.transform.SetAsLastSibling();
-        var gridLayoutGroup = Grid.AddComponent<GridLayoutGroup>();
+        gridLayoutGroup = Grid.AddComponent<GridLayoutGroup>();
 
+        //gridLayoutGroup.cellSize = new Vector2(Screen.currentResolution.width * (52 / 1920), Screen.currentResolution.height * (30 / 1080));
         gridLayoutGroup.cellSize = new Vector2(52, 30);
         gridLayoutGroup.spacing = new Vector2(8, 2);
         gridLayoutGroup.childAlignment = TextAnchor.UpperCenter;
         gridLayoutGroup.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         gridLayoutGroup.constraintCount = 3;
-
-        var rect = Grid.GetComponent<RectTransform>();
+        
+        rect = Grid.GetComponent<RectTransform>();
         rect.pivot = new Vector2(0.5f, 1);
         rect.anchorMax = new Vector2(0.5f, 1);
         rect.anchorMin = new Vector2(0.5f, 1);
@@ -54,4 +58,5 @@ internal class CreateButtons {
         SortChest.background.color = new Color(0.502f, 0.3569f, 0.2353f, 1f);
         SortChest.textMesh.fontSize = 10;
     }
+    
 }

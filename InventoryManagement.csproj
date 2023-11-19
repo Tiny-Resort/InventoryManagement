@@ -11,6 +11,7 @@
       <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
       <PackageReference Include="BepInEx.AutoPlugin" Version="1.0.1" PrivateAssets="all" />
       <PackageReference Include="BepInEx.Unity" Version="6.0.0-pre.1" />
+      <PackageReference Include="SemanticVersioning" Version="3.0.0-beta2" />
         <!-- <PackageReference Include="Dinkum.GameLibs" Version="*-r.*"/> -->
       <PackageReference Include="UnityEngine.Modules" Version="2020.3.17" PrivateAssets="all" IncludeAssets="compile" />
     </ItemGroup>
@@ -47,9 +48,6 @@
         </Reference>
         <Reference Include="netstandard">
             <HintPath>..\DinkumInstallFolder\Dinkum_Data\Managed\netstandard.dll</HintPath>
-        </Reference>
-        <Reference Include="SemanticVersioning">
-            <HintPath>..\DinkumInstallFolder\BepInEx\core\SemanticVersioning.dll</HintPath>
         </Reference>
         <Reference Include="SimpleWebTransport">
             <HintPath>..\DinkumInstallFolder\Dinkum_Data\Managed\SimpleWebTransport.dll</HintPath>
@@ -98,9 +96,6 @@
         </Reference>
         <Reference Include="System.Runtime.Serialization.Xml">
             <HintPath>..\DinkumInstallFolder\Dinkum_Data\Managed\System.Runtime.Serialization.Xml.dll</HintPath>
-        </Reference>
-        <Reference Include="System.ServiceModel.Internals">
-            <HintPath>..\DinkumInstallFolder\Dinkum_Data\Managed\System.ServiceModel.Internals.dll</HintPath>
         </Reference>
         <Reference Include="System.Transactions">
             <HintPath>..\DinkumInstallFolder\Dinkum_Data\Managed\System.Transactions.dll</HintPath>

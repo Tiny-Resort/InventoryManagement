@@ -29,9 +29,9 @@ namespace TinyResort {
                 TRTools.TopNotification($"{__instance.allItems[__instance.invSlots[__instance.selectedSlot].itemNo].itemName}", $"Durability is at {percentRemaining}%");
                 ASound WarnTools = StatusManager.manage.lowHealthSound;
                 WarnTools.volume = WarnTools.volume + 0.2f;
-                SoundManager.manage.play2DSound(WarnTools);
+                SoundManager.Instance.play2DSound(WarnTools);
 
-                for (int i = 0; i < SoundManager.manage.my2DAudios.Length; i++) { InventoryManagement.Plugin.Log($"Sound: {SoundManager.manage.my2DAudios[i].name}"); }
+                for (int i = 0; i < SoundManager.Instance.my2DAudios.Length; i++) { InventoryManagement.Plugin.Log($"Sound: {SoundManager.Instance.my2DAudios[i].name}"); }
                 warnedPercent = true;
             }
             if (percentRemaining <= InventoryManagement.swapPercentage.Value && InventoryManagement.doSwapTools.Value) {
@@ -40,9 +40,9 @@ namespace TinyResort {
                 currentTool.slotID = __instance.selectedSlot;
                 CheckForReplacement(currentTool);
                 if (replacementTools.Count > 0) {
-                    Inventory.inv.invSlots[currentTool.slotID].updateSlotContentsAndRefresh(replacementTools[0].itemID, replacementTools[0].fuel);
-                    Inventory.inv.invSlots[replacementTools[0].slotID].updateSlotContentsAndRefresh(currentTool.itemID, currentTool.fuel);
-                    Inventory.inv.equipNewSelectedSlot();
+                    Inventory.Instance.invSlots[currentTool.slotID].updateSlotContentsAndRefresh(replacementTools[0].itemID, replacementTools[0].fuel);
+                    Inventory.Instance.invSlots[replacementTools[0].slotID].updateSlotContentsAndRefresh(currentTool.itemID, currentTool.fuel);
+                    Inventory.Instance.equipNewSelectedSlot();
                 }
             }
         }
@@ -52,7 +52,8 @@ namespace TinyResort {
             replacementTools.Clear();
             for (var i = 0; i < currentInventory.invSlots.Length; i++) {
                 InventoryManagement.Plugin.Log($"i: {i} | Size: {currentInventory.invSlots.Length}");
-                if (currentInventory.invSlots[i].itemNo != -1 && Inventory.inv.allItems[currentInventory.invSlots[i].itemNo].hasFuel) {
+                if (currentInventory.invSlots[i].itemNo != -1 && Inventory.Instance.allItems[currentInventory.invSlots
+                        [i].itemNo].hasFuel) {
                     float tempItemFuel = (float)currentInventory.invSlots[i].stack / currentInventory.invSlots[i].itemInSlot.fuelMax * 100;
 
                     var checkLastWord = currentInventory.invSlots[i].itemInSlot.itemName.Contains(currentInventory.invSlots[currentInventory.selectedSlot].itemInSlot.itemName.Split(' ')[currentInventory.invSlots[currentInventory.selectedSlot].itemInSlot.itemName.Split(' ').Length - 1]);

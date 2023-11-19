@@ -20,7 +20,7 @@ public class InventoryManagement : BaseUnityPlugin {
     public delegate void ParsingEvent();
     public const string pluginGuid = "dev.TinyResort.InventoryManagement";
     public const string pluginName = "Inventory Management";
-    public const string pluginVersion = "0.8.5";
+    public const string pluginVersion = "0.8.6";
 
     public static TRPlugin Plugin;
     private static InventoryManagement instance;
@@ -65,12 +65,13 @@ public class InventoryManagement : BaseUnityPlugin {
     public static TRCustomItem couch;
 
     public static bool ClientInsideHouse =>
-        NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
+        NetworkMapSharer.Instance.localChar.myInteract.IsInsidePlayerHouse && clientInServer;
     public static bool ClientOutsideHouse =>
-        !NetworkMapSharer.share.localChar.myInteract.insidePlayerHouse && clientInServer;
+        !NetworkMapSharer.Instance.localChar.myInteract.IsInsidePlayerHouse && clientInServer;
 
-    public static bool modDisabled => RealWorldTimeLight.time.underGround;
 
+    public static bool modDisabled => RealWorldTimeLight.time.GetCurrentMapArea() != WorldArea.MAIN_ISLAND;
+    
     public void Awake() {
         instance = this;
 
@@ -185,16 +186,19 @@ public class InventoryManagement : BaseUnityPlugin {
     }
 
     public void Update() {
-        if (NetworkMapSharer.share.localChar && !CreateButtons.InventoryMenu && Inventory.inv.invOpen) { CreateButtons.CreateInventoryButtons(); }
-        if (NetworkMapSharer.share.localChar && !CreateButtons.ChestWindowLayout && ChestWindow.chests.chestWindowOpen) { CreateButtons.CreateChestButtons(); }
+        if (NetworkMapSharer.Instance.localChar && !CreateButtons.InventoryMenu && Inventory.Instance.invOpen) { CreateButtons.CreateInventoryButtons(); }
+        if (NetworkMapSharer.Instance.localChar && !CreateButtons.ChestWindowLayout && ChestWindow.chests.chestWindowOpen) { CreateButtons.CreateChestButtons(); }
+        if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"Width: {Screen.currentResolution.width} | Height: {Screen.currentResolution.height}"); }
+        if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"M - Width: {Screen.currentResolution.m_Width} | Height: {Screen.currentResolution.m_Height}"); }
+
     }
 
     public void LateUpdate() {
-        var tmpColor = Inventory.inv.invOpen ? LockSlots.LockedSlotColor : Color.white;
-        if (LockSlots.lockedSlots.Count > 0 && Inventory.inv.inventoryWindow != null)
-            for (var i = 0; i < Inventory.inv.invSlots.Length; i++)
+        var tmpColor = Inventory.Instance.invOpen ? LockSlots.LockedSlotColor : Color.white;
+        if (LockSlots.lockedSlots.Count > 0 && Inventory.Instance.inventoryWindow != null)
+            for (var i = 0; i < Inventory.Instance.invSlots.Length; i++)
                 if (LockSlots.lockedSlots.Contains(i))
-                    Inventory.inv.invSlots[i].GetComponent<Image>().color = tmpColor;
+                    Inventory.Instance.invSlots[i].GetComponent<Image>().color = tmpColor;
     }
 
     // If people still want to use the hotkeys
@@ -210,7 +214,7 @@ public class InventoryManagement : BaseUnityPlugin {
             }
             else {
                 TRTools.TopNotification(
-                    "Inventory Management", "Send items to chests is disabled in the mines/playerhouse."
+                    "Inventory Management", "Send items to chests is disabled in the playerhouse, the mines, and the off the main island."
                 );
             }
         }
@@ -223,21 +227,21 @@ public class InventoryManagement : BaseUnityPlugin {
     public static ItemInfo GetItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
 
     public static void removeFromPlayerInventory(int itemID, int slotID, int amountRemaining) {
-        Inventory.inv.invSlots[slotID].stack = amountRemaining;
-        Inventory.inv.invSlots[slotID]
+        Inventory.Instance.invSlots[slotID].stack = amountRemaining;
+        Inventory.Instance.invSlots[slotID]
                  .updateSlotContentsAndRefresh(amountRemaining == 0 ? -1 : itemID, amountRemaining);
     }
     
     public static void UpdateAllItems() {
         var startingPoint = ignoreHotbar.Value ? 11 : 0;
 
-        for (var i = startingPoint; i < Inventory.inv.invSlots.Length; i++)
+        for (var i = startingPoint; i < Inventory.Instance.invSlots.Length; i++)
             if (!LockSlots.lockedSlots.Contains(i)) {
-                var invItemId = Inventory.inv.invSlots[i].itemNo;
+                var invItemId = Inventory.Instance.invSlots[i].itemNo;
                 if (invItemId != -1) {
-                    var amountToAdd = Inventory.inv.invSlots[i].stack;
-                    var hasFuel = Inventory.inv.invSlots[i].itemInSlot.hasFuel;
-                    var isStackable = Inventory.inv.invSlots[i].itemInSlot.isStackable;
+                    var amountToAdd = Inventory.Instance.invSlots[i].stack;
+                    var hasFuel = Inventory.Instance.invSlots[i].itemInSlot.hasFuel;
+                    var isStackable = Inventory.Instance.invSlots[i].itemInSlot.isStackable;
                     var info = GetItem(invItemId);
 
                     // Stops if we don't have the item stored in a chest
@@ -255,7 +259,7 @@ public class InventoryManagement : BaseUnityPlugin {
                                 !isStackable ? amountToAdd : info.sources[d].quantity + amountToAdd;
                             if (slotToUse != 999) {
                                 if (clientInServer)
-                                    NetworkMapSharer.share.localChar.myPickUp.CmdChangeOneInChest(
+                                    NetworkMapSharer.Instance.localChar.myPickUp.CmdChangeOneInChest(
                                         info.sources[d].chest.xPos,
                                         info.sources[d].chest.yPos,
                                         slotToUse,
@@ -281,7 +285,7 @@ public class InventoryManagement : BaseUnityPlugin {
                 }
             }
         NotificationManager.manage.createChatNotification($"{totalDeposited} item(s) have been deposited.");
-        SoundManager.manage.play2DSound(SoundManager.manage.inventorySound);
+        SoundManager.Instance.play2DSound(SoundManager.Instance.inventorySound);
     }
 
     public static int checkForEmptySlot(Chest ChestInfo) {
@@ -361,7 +365,7 @@ public class InventoryManagement : BaseUnityPlugin {
             if (HouseManager.manage.allHouses[i].isThePlayersHouse)
                 playerHouse = HouseManager.manage.allHouses[i];
 
-        playerPosition = NetworkMapSharer.share.localChar.myInteract.transform.position;
+        playerPosition = NetworkMapSharer.Instance.localChar.myInteract.transform.position;
 
         // Gets chests inside houses
         if (ClientInsideHouse || !clientInServer) {
@@ -402,8 +406,8 @@ public class InventoryManagement : BaseUnityPlugin {
 
             if (clientInServer) {
                 unconfirmedChests[(tempX, tempY)] = house;
-                NetworkMapSharer.share.localChar.myPickUp.CmdOpenChest(tempX, tempY);
-                NetworkMapSharer.share.localChar.CmdCloseChest(tempX, tempY);
+                NetworkMapSharer.Instance.localChar.myPickUp.CmdOpenChest(tempX, tempY);
+                NetworkMapSharer.Instance.localChar.CmdCloseChest(tempX, tempY);
             }
             else {
                 ContainerManager.manage.checkIfEmpty(tempX, tempY, house);
