@@ -1,6 +1,8 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Xml.Schema;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -58,7 +60,6 @@ public class InventoryManagement : BaseUnityPlugin {
     public static bool initalizedObjects = false;
     public static bool ButtonIsReady = true;
     public static bool clientInServer;
-    public static bool findingNearbyChests;
 
     public static Vector3 playerPosition;
     public static TRModData modData;
@@ -71,7 +72,6 @@ public class InventoryManagement : BaseUnityPlugin {
 
 
     public static bool modDisabled => RealWorldTimeLight.time.GetCurrentMapArea() != WorldArea.MAIN_ISLAND;
-    
     public void Awake() {
         instance = this;
 
@@ -82,7 +82,6 @@ public class InventoryManagement : BaseUnityPlugin {
         Plugin.RequireAPIVersion("0.7.5");
 
         #region Configuration
-
         radius = Config.Bind(
             "General", "Range", 30, "Increases the range it looks for storage containers by an approximate tile count."
         );
@@ -139,11 +138,9 @@ public class InventoryManagement : BaseUnityPlugin {
             "Tools", "UseSimilarTools", true,
             "Set to false if you want to disable swapping to similar tools (i.e swapping from Basic Axe to Copper Axe)."
         );
-
         #endregion
 
         #region Parse Config String to Int
-
         // Convert this to use a .sav instead of using the base config settings
         if (ignoreSpecifcSlots != null) {
             var tmp = ignoreSpecifcSlots.Value.Trim().Split(',');
@@ -156,41 +153,31 @@ public class InventoryManagement : BaseUnityPlugin {
         // TODO: Remove this and make sort button a rotation between options. 
         var tmpSort = sortingOrder.Value.Trim().ToLower().Split(',');
         for (var i = 0; i < tmpSort.Length; i++) SortItems.typeOrder[tmpSort[i]] = i;
-
         #endregion
 
         #region Patching
-
         Plugin.QuickPatch(typeof(RealWorldTimeLight), "Update", typeof(InventoryManagement), "updateRWTLPrefix");
-        Plugin.QuickPatch(
-            typeof(ContainerManager), "UserCode_TargetOpenChest", typeof(InventoryManagement), null,
-            "UserCode_TargetOpenChestPostfix"
-        );
-        Plugin.QuickPatch(
-            typeof(ChestWindow), "openChestInWindow", typeof(InventoryManagement), "openChestInWindowPrefix"
-        );
-
+        
         // Patches for locking slots
         Plugin.QuickPatch(typeof(Inventory), "moveCursor", typeof(LockSlots), "moveCursorPrefix");
 
         // Patches for tools
         Plugin.QuickPatch(typeof(Inventory), "useItemWithFuel", typeof(Tools), "useItemWithFuelPatch");
         Plugin.QuickPatch(typeof(EquipItemToChar), "equipNewItem", typeof(Tools), "equipNewItemPrefix");
-
         #endregion
-
-        /*var fence = Plugin.AddCustomItem("custom_assets/custom_items/customfence", 1);
-        Plugin.AddCustomItem("custom_assets/custom_items/custompath", 2);*/
-
-        //Plugin.AddConflictingPlugin("tinyresort.dinkum.InventoryManagement");
+        
     }
 
     public void Update() {
         if (NetworkMapSharer.Instance.localChar && !CreateButtons.InventoryMenu && Inventory.Instance.invOpen) { CreateButtons.CreateInventoryButtons(); }
         if (NetworkMapSharer.Instance.localChar && !CreateButtons.ChestWindowLayout && ChestWindow.chests.chestWindowOpen) { CreateButtons.CreateChestButtons(); }
-        if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"Width: {Screen.currentResolution.width} | Height: {Screen.currentResolution.height}"); }
-        if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"M - Width: {Screen.currentResolution.m_Width} | Height: {Screen.currentResolution.m_Height}"); }
-
+     //if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"Width: {Screen.currentResolution.width} | Height: {Screen.currentResolution.height}"); }
+        //if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"M - Width: {Screen.currentResolution.m_Width} | Height: {Screen.currentResolution.m_Height}"); }
+        if (Input.GetKeyDown(KeyCode.End)) {
+            Plugin.LogError(
+                $"PlayerHouse? {NetworkMapSharer.Instance.localChar.myInteract.InsideHouseDetails.isThePlayersHouse}"
+            );
+        }
     }
 
     public void LateUpdate() {
@@ -201,12 +188,12 @@ public class InventoryManagement : BaseUnityPlugin {
                     Inventory.Instance.invSlots[i].GetComponent<Image>().color = tmpColor;
     }
 
+    internal static void RequestActiveChestList() => TRNetwork.share.CmdRequestActiveChests();
+
     // If people still want to use the hotkeys
     [HarmonyPrefix] public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
         clientInServer = !__instance.isServer;
-
-        //if (Input.GetKeyDown(KeyCode.F8)) TRMail.SendItemInMail(couch, 5, true);
-
+        
         if (Input.GetKeyDown(exportKeybind.Value) || Input.GetKeyDown(exportControllerKeybind.Value)) {
             if (!modDisabled) {
                 SortItems.SortToChests();
@@ -295,47 +282,43 @@ public class InventoryManagement : BaseUnityPlugin {
         return 999;
     }
 
-    public static bool openChestInWindowPrefix() => !findingNearbyChests;
+    internal static HouseDetails GetPlayerHouse() {
+        for (var i = 0; i < HouseManager.manage.allHouses.Count; i++)
+            if (HouseManager.manage.allHouses[i].isThePlayersHouse)
+                playerHouse = HouseManager.manage.allHouses[i];
+        return playerHouse;
+    }
 
-    [HarmonyPostfix]
-    public static void UserCode_TargetOpenChestPostfix(
-        ContainerManager __instance, int xPos, int yPos, int[] itemIds, int[] itemStack
-    ) {
-        // TODO: Get proper house details
-        if (unconfirmedChests.TryGetValue((xPos, yPos), out var house)) {
-            unconfirmedChests.Remove((xPos, yPos));
-            AddChest(xPos, yPos, house);
+    internal static void GenerateNearbyItems() {
+        nearbyItems.Clear();
+        RequestActiveChestList();
+
+        for (var i = 0; i < HouseManager.manage.allHouses.Count; i++)
+            if (HouseManager.manage.allHouses[i].isThePlayersHouse)
+                playerHouse = HouseManager.manage.allHouses[i];
+        
+        foreach (Chest chest in ContainerManager.manage.activeChests) {
+            // Main Island is 0
+            playerHouse = null;
+            
+            if (chest.placedInWorldLevel != 0) continue;
+            if (chest.inside) {
+                HouseDetails playerHouse = GetPlayerHouse();
+            }
+            
+            for (var i = 0; i < chest.itemIds.Length; i++) {
+                if (chest.itemIds[i] != -1 && TRItems.GetItemDetails(chest.itemIds[i])) {
+                    AddItem(
+                        chest.itemIds[i], chest.itemStacks[i], i,
+                        TRItems.GetItemDetails(chest.itemIds[i]).checkIfStackable(), playerHouse,
+                        chest
+                    );
+                }
+
+            }
         }
     }
-
-    public static void ParseAllItems() {
-        instance.StopAllCoroutines();
-        instance.StartCoroutine(ParseAllItemsRoutine());
-    }
-
-    public static IEnumerator ParseAllItemsRoutine() {
-        findingNearbyChests = true;
-        FindNearbyChests();
-        if (clientInServer) {
-            yield return new WaitForSeconds(.5f);
-            Plugin.Log($"Probably Locked - CountRemaining: {unconfirmedChests.Count}");
-        } //WaitUntil(() => unconfirmedChests.Count <= 0); }
-        nearbyItems.Clear();
-
-        // Get all items in nearby chests
-        foreach (var ChestInfo in nearbyChests)
-            for (var i = 0; i < ChestInfo.chest.itemIds.Length; i++)
-                if (ChestInfo.chest.itemIds[i] != -1 && TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]))
-                    AddItem(
-                        ChestInfo.chest.itemIds[i], ChestInfo.chest.itemStacks[i], i,
-                        TRItems.GetItemDetails(ChestInfo.chest.itemIds[i]).checkIfStackable(), ChestInfo.house,
-                        ChestInfo.chest
-                    );
-        findingNearbyChests = false;
-        OnFinishedParsing?.Invoke();
-        OnFinishedParsing = null;
-    }
-
+    
     public static void AddItem(
         int itemID, int quantity, int slotID, bool isStackable, HouseDetails isInHouse, Chest chest
     ) {
@@ -357,69 +340,6 @@ public class InventoryManagement : BaseUnityPlugin {
         nearbyItems[itemID] = info;
     }
 
-    public static void FindNearbyChests() {
-        var chests = new List<(ChestPlaceable chest, bool insideHouse)>();
-        nearbyChests.Clear();
-
-        for (var i = 0; i < HouseManager.manage.allHouses.Count; i++)
-            if (HouseManager.manage.allHouses[i].isThePlayersHouse)
-                playerHouse = HouseManager.manage.allHouses[i];
-
-        playerPosition = NetworkMapSharer.Instance.localChar.myInteract.transform.position;
-
-        // Gets chests inside houses
-        if (ClientInsideHouse || !clientInServer) {
-            var chestsInsideHouse = Physics.OverlapBox(
-                new Vector3(playerPosition.x, -88, playerPosition.z),
-                new Vector3(radius.Value * 2, 5, radius.Value * 2), Quaternion.identity,
-                LayerMask.GetMask(LayerMask.LayerToName(15))
-            );
-            for (var i = 0; i < chestsInsideHouse.Length; i++) {
-                var chestComponent = chestsInsideHouse[i].GetComponentInParent<ChestPlaceable>();
-                if (chestComponent == null) continue;
-                if (chestComponent.gameObject.name == "RecyclingBox(Clone)") continue;
-                chests.Add((chestComponent, true));
-            }
-        }
-
-        // Gets chests in the overworld
-        if (ClientOutsideHouse || !clientInServer) {
-            var chestsOutside = Physics.OverlapBox(
-                new Vector3(playerPosition.x, -7, playerPosition.z),
-                new Vector3(radius.Value * 2, 20, radius.Value * 2), Quaternion.identity,
-                LayerMask.GetMask(LayerMask.LayerToName(15))
-            );
-            for (var j = 0; j < chestsOutside.Length; j++) {
-                var chestComponent = chestsOutside[j].GetComponentInParent<ChestPlaceable>();
-                if (chestComponent == null) continue;
-                if (chestComponent.gameObject.name == "RecyclingBox(Clone)") continue;
-                chests.Add((chestComponent, false));
-            }
-        }
-
-        for (var k = 0; k < chests.Count; k++) {
-
-            var tempX = chests[k].chest.myXPos();
-            var tempY = chests[k].chest.myYPos();
-
-            var house = chests[k].insideHouse ? playerHouse : null;
-
-            if (clientInServer) {
-                unconfirmedChests[(tempX, tempY)] = house;
-                NetworkMapSharer.Instance.localChar.myPickUp.CmdOpenChest(tempX, tempY);
-                NetworkMapSharer.Instance.localChar.CmdCloseChest(tempX, tempY);
-            }
-            else {
-                ContainerManager.manage.checkIfEmpty(tempX, tempY, house);
-                AddChest(tempX, tempY, house);
-            }
-        }
-    }
-
-    private static void AddChest(int xPos, int yPos, HouseDetails house) {
-        nearbyChests.Add((ContainerManager.manage.activeChests.First(i => i.xPos == xPos && i.yPos == yPos), house));
-        nearbyChests = nearbyChests.Distinct().ToList();
-    } 
 
     public class ItemInfo {
         public int quantity;
