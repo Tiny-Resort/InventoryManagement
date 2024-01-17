@@ -213,13 +213,13 @@ public class InventoryManagement : BaseUnityPlugin {
 
     public static ItemInfo GetItem(int itemID) => nearbyItems.TryGetValue(itemID, out var info) ? info : null;
 
-    public static void removeFromPlayerInventory(int itemID, int slotID, int amountRemaining) {
+    public static void RemoveItemFromPlayerInventory(int itemID, int slotID, int amountRemaining) {
         Inventory.Instance.invSlots[slotID].stack = amountRemaining;
         Inventory.Instance.invSlots[slotID]
                  .updateSlotContentsAndRefresh(amountRemaining == 0 ? -1 : itemID, amountRemaining);
     }
     
-    public static void UpdateAllItems() {
+    public static void DepositItems() {
         var startingPoint = ignoreHotbar.Value ? 11 : 0;
 
         for (var i = startingPoint; i < Inventory.Instance.invSlots.Length; i++)
@@ -262,7 +262,7 @@ public class InventoryManagement : BaseUnityPlugin {
                                         info.sources[d].quantity,
                                         info.sources[d].inPlayerHouse
                                     );
-                                removeFromPlayerInventory(invItemId, i, 0);
+                                RemoveItemFromPlayerInventory(invItemId, i, 0);
                                 totalDeposited++;
                                 break;
                             }

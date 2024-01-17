@@ -15,6 +15,13 @@ internal class CreateButtons {
     public static GridLayoutGroup gridLayoutGroup;
     public static RectTransform rect;
 
+    
+    // TODO: Get the size of the inventory slots grid and use that as a reference point so it is always in the same spot. 
+    internal static Vector3 GetInventorySlotPositions() {
+        GameObject inventoryWindows = GameObject.Find("Canvas/Menu/InventoryWindows");
+        return inventoryWindows.transform.position;
+    }
+    
     public static void CreateInventoryButtons() {
         InventoryMenu = GameObject.Find("Canvas/Menu");
         Grid = new GameObject();

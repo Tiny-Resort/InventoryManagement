@@ -72,7 +72,7 @@ namespace TinyResort {
 
         internal static void SortToChests() {
             InventoryManagement.GenerateNearbyItems();
-            InventoryManagement.UpdateAllItems();
+            InventoryManagement.DepositItems();
             /*InventoryManagement.OnFinishedParsing = () => InventoryManagement.UpdateAllItems();
             InventoryManagement.ParseAllItems();*/
             InventoryManagement.totalDeposited = 0;
