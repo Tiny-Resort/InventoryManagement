@@ -173,11 +173,6 @@ public class InventoryManagement : BaseUnityPlugin {
         if (NetworkMapSharer.Instance.localChar && !CreateButtons.ChestWindowLayout && ChestWindow.chests.chestWindowOpen) { CreateButtons.CreateChestButtons(); }
      //if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"Width: {Screen.currentResolution.width} | Height: {Screen.currentResolution.height}"); }
         //if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"M - Width: {Screen.currentResolution.m_Width} | Height: {Screen.currentResolution.m_Height}"); }
-        if (Input.GetKeyDown(KeyCode.End)) {
-            Plugin.LogError(
-                $"PlayerHouse? {NetworkMapSharer.Instance.localChar.myInteract.InsideHouseDetails.isThePlayersHouse}"
-            );
-        }
     }
 
     public void LateUpdate() {
@@ -284,33 +279,42 @@ public class InventoryManagement : BaseUnityPlugin {
 
     internal static HouseDetails GetPlayerHouse() {
         for (var i = 0; i < HouseManager.manage.allHouses.Count; i++)
-            if (HouseManager.manage.allHouses[i].isThePlayersHouse)
+            if (HouseManager.manage.allHouses[i].isThePlayersHouse) {
+                Plugin.LogError(
+                    $"House Location: {HouseManager.manage.allHouses[i].xPos}.{HouseManager.manage.allHouses[i].yPos}"
+                );
                 playerHouse = HouseManager.manage.allHouses[i];
+            }
         return playerHouse;
     }
+    
 
     internal static void GenerateNearbyItems() {
         nearbyItems.Clear();
         RequestActiveChestList();
-
-        for (var i = 0; i < HouseManager.manage.allHouses.Count; i++)
-            if (HouseManager.manage.allHouses[i].isThePlayersHouse)
-                playerHouse = HouseManager.manage.allHouses[i];
+        GetPlayerHouse();
+        
+        // This should never happen?
+        if (playerHouse == null) return;
         
         foreach (Chest chest in ContainerManager.manage.activeChests) {
             // Main Island is 0
-            playerHouse = null;
+            HouseDetails chestInsidePlayerHouse = null;
             
+            Plugin.LogError($"Chest Location: {chest.xPos}.{chest.yPos}\n"
+                          + $"Chest Location (Inside): {chest.insideX}.{chest.insideY}\n"
+                          + $"Chest Inside: {chest.inside}");
+
             if (chest.placedInWorldLevel != 0) continue;
-            if (chest.inside) {
-                HouseDetails playerHouse = GetPlayerHouse();
+            if (chest.inside && chest.xPos == playerHouse.xPos && chest.yPos == playerHouse.yPos) {
+                chestInsidePlayerHouse = playerHouse;
             }
             
             for (var i = 0; i < chest.itemIds.Length; i++) {
                 if (chest.itemIds[i] != -1 && TRItems.GetItemDetails(chest.itemIds[i])) {
                     AddItem(
                         chest.itemIds[i], chest.itemStacks[i], i,
-                        TRItems.GetItemDetails(chest.itemIds[i]).checkIfStackable(), playerHouse,
+                        TRItems.GetItemDetails(chest.itemIds[i]).checkIfStackable(), chestInsidePlayerHouse,
                         chest
                     );
                 }
