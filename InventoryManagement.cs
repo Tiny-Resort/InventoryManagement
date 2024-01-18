@@ -22,7 +22,7 @@ public class InventoryManagement : BaseUnityPlugin {
     public delegate void ParsingEvent();
     public const string pluginGuid = "dev.TinyResort.InventoryManagement";
     public const string pluginName = "Inventory Management";
-    public const string pluginVersion = "0.8.6";
+    public const string pluginVersion = "0.9.0";
 
     public static TRPlugin Plugin;
     private static InventoryManagement instance;
