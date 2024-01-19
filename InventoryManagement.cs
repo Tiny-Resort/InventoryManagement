@@ -13,6 +13,7 @@ using UnityEngine.UI;
 // TODO: Update method to use .sav rather than config file
 // TODO: Add a highlight on new items obtianed since last opening inventory. Will need to remove the items if you sort to chests automatically without opening first
 
+// TODO: Add check to make sure host has activeChest list from the host. 
 namespace TinyResort; 
 
 [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
@@ -79,7 +80,7 @@ public class InventoryManagement : BaseUnityPlugin {
         modData = TRData.Subscribe(pluginGuid);
 
         TRData.postLoadEvent += LockSlots.LoadLockedSlots;
-        Plugin.RequireAPIVersion("0.7.5");
+        Plugin.RequireAPIVersion("0.8.8");
 
         #region Configuration
         radius = Config.Bind(

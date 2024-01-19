@@ -33,9 +33,13 @@ internal class CreateButtons {
             NumberOfSlotsPerRow = 10;
             adjustment = 5f;
         }
-        else {
+        else if (InventorySlots.transform.GetChild(25).gameObject.activeInHierarchy) {
             NumberOfSlotsPerRow = 9;
             adjustment = 10f;
+        }
+        else {
+            NumberOfSlotsPerRow = 8;
+            adjustment = 15f;
         }
         Grid = new GameObject();
         Grid.name = "Inventory Management Grid";
