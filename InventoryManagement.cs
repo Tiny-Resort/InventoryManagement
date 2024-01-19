@@ -8,6 +8,7 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
+using System;
 
 // TODO: Add the ability to send specific items to nearest chest by some key combination
 // TODO: Update method to use .sav rather than config file
@@ -182,7 +183,6 @@ public class InventoryManagement : BaseUnityPlugin {
                     Inventory.Instance.invSlots[i].GetComponent<Image>().color = tmpColor;
     }
 
-    internal static void RequestActiveChestList() => TRNetwork.share.CmdRequestActiveChests();
 
     // If people still want to use the hotkeys
     [HarmonyPrefix] public static void updateRWTLPrefix(RealWorldTimeLight __instance) {
@@ -283,11 +283,12 @@ public class InventoryManagement : BaseUnityPlugin {
             }
         return playerHouse;
     }
-    
 
-    internal static void GenerateNearbyItems() {
+
+
+
+    internal static void GenerateNearbyItems() {    
         nearbyItems.Clear();
-        RequestActiveChestList();
         GetPlayerHouse();
         
         // This should never happen?
