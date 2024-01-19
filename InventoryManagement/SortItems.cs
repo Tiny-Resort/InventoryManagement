@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace TinyResort {
 
@@ -75,6 +76,10 @@ namespace TinyResort {
         }
 
         internal static void SortToChests() {
+            if (InventoryManagement.clientInServer && ChestWindow.chests.chestWindowOpen) {
+                TRTools.TopNotification("Inventory Management", "Send to Chests is disabled for clients with a chest open. Please try again with the chest closed.");
+                return;
+            }
             if (InventoryManagement.clientInServer) {
                 InventoryManagement.Plugin.LogError($"Running SortToChest as Client.");
 
@@ -97,20 +102,22 @@ namespace TinyResort {
             InventoryManagement.GenerateNearbyItems();
             InventoryManagement.DepositItems();
             InventoryManagement.totalDeposited = 0;
-
+    
             if (InventoryManagement.clientInServer) TRNetwork.postActiveChestRetrival -= EndSortToChests;
             InventoryManagement.Plugin.LogError($"Running EndSortToChest.");
 
             
-            // Refresh Current Chest Window
+            /*// Refresh Current Chest Window
             if (InventoryManagement.clientInServer) {
                 toggleChestWindow = true;
                 var clientOpenChest = GetCurrentOpenChest();
                 if (clientOpenChest == null || !ChestWindow.chests.chestWindowOpen) return;
                 ChestWindow.chests.closeChestInWindow();
+                // A Half Second delay to fix update
+                Thread.Sleep(500);
                 ChestWindow.chests.openChestInWindow(clientOpenChest.xPos, clientOpenChest.yPos);
                 toggleChestWindow = false;
-            }
+            }*/
         }
         
         internal static string getItemType(int itemID) {
