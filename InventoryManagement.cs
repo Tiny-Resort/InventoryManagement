@@ -172,8 +172,6 @@ public class InventoryManagement : BaseUnityPlugin {
     public void Update() {
         if (NetworkMapSharer.Instance.localChar && !CreateButtons.InventoryMenu && Inventory.Instance.invOpen) { CreateButtons.CreateInventoryButtons(); }
         if (NetworkMapSharer.Instance.localChar && !CreateButtons.ChestWindowLayout && ChestWindow.chests.chestWindowOpen) { CreateButtons.CreateChestButtons(); }
-     //if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"Width: {Screen.currentResolution.width} | Height: {Screen.currentResolution.height}"); }
-        //if (Input.GetKeyDown(KeyCode.End)) { InventoryManagement.Plugin.LogError($"M - Width: {Screen.currentResolution.m_Width} | Height: {Screen.currentResolution.m_Height}"); }
     }
 
     public void LateUpdate() {
@@ -281,9 +279,6 @@ public class InventoryManagement : BaseUnityPlugin {
     internal static HouseDetails GetPlayerHouse() {
         for (var i = 0; i < HouseManager.manage.allHouses.Count; i++)
             if (HouseManager.manage.allHouses[i].isThePlayersHouse) {
-                Plugin.LogError(
-                    $"House Location: {HouseManager.manage.allHouses[i].xPos}.{HouseManager.manage.allHouses[i].yPos}"
-                );
                 playerHouse = HouseManager.manage.allHouses[i];
             }
         return playerHouse;
@@ -302,10 +297,6 @@ public class InventoryManagement : BaseUnityPlugin {
             // Main Island is 0
             HouseDetails chestInsidePlayerHouse = null;
             
-            Plugin.LogError($"Chest Location: {chest.xPos}.{chest.yPos}\n"
-                          + $"Chest Location (Inside): {chest.insideX}.{chest.insideY}\n"
-                          + $"Chest Inside: {chest.inside}");
-
             if (chest.placedInWorldLevel != 0) continue;
             if (chest.inside && chest.xPos == playerHouse.xPos && chest.yPos == playerHouse.yPos) {
                 chestInsidePlayerHouse = playerHouse;
@@ -314,7 +305,7 @@ public class InventoryManagement : BaseUnityPlugin {
             for (var i = 0; i < chest.itemIds.Length; i++) {
                 if (chest.itemIds[i] != -1 && TRItems.GetItemDetails(chest.itemIds[i])) {
                     AddItem(
-                        chest.itemIds[i], chest.itemStacks[i], i,
+                        chest.itemIds[i],  chest.itemStacks[i], i,
                         TRItems.GetItemDetails(chest.itemIds[i]).checkIfStackable(), chestInsidePlayerHouse,
                         chest
                     );
