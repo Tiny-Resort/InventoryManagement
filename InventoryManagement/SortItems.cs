@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace TinyResort {
 
@@ -13,7 +14,7 @@ namespace TinyResort {
         internal static int currentChestY;
         internal static HouseDetails currentChestHouseDetails;
         internal static Chest currentChest;
-
+        internal static bool toggleChestWindow;
         internal static void SortInventory() {
 
             ParseAllItems();
@@ -70,12 +71,55 @@ namespace TinyResort {
 
         }
 
-        internal static void SortToChests() {
-            InventoryManagement.OnFinishedParsing = () => InventoryManagement.UpdateAllItems();
-            InventoryManagement.ParseAllItems();
-            InventoryManagement.totalDeposited = 0;
+        internal static void RequestActiveChestList() {
+            TRNetwork.share.CmdRequestActiveChests();
         }
 
+        internal static void SortToChests() {
+            if (InventoryManagement.clientInServer && ChestWindow.chests.chestWindowOpen) {
+                TRTools.TopNotification("Inventory Management", "Send to Chests is disabled for clients with a chest open. Please try again with the chest closed.");
+                return;
+            }
+            if (InventoryManagement.clientInServer) {
+                InventoryManagement.Plugin.LogError($"Running SortToChest as Client.");
+
+                // Request Items from Host
+                RequestActiveChestList();
+
+                // Scheule to run after chest update completed
+                TRNetwork.postActiveChestRetrival += EndSortToChests;
+            }
+            else {
+                // If Host is running command skip the update portion of the code
+                InventoryManagement.Plugin.LogError($"Running SortToChest as Host.");
+                EndSortToChests();
+            }
+            
+        }
+
+        internal static void EndSortToChests() {
+            InventoryManagement.Plugin.LogError($"Running EndSortToChest.");
+            InventoryManagement.GenerateNearbyItems();
+            InventoryManagement.DepositItems();
+            InventoryManagement.totalDeposited = 0;
+    
+            if (InventoryManagement.clientInServer) TRNetwork.postActiveChestRetrival -= EndSortToChests;
+            InventoryManagement.Plugin.LogError($"Running EndSortToChest.");
+
+            
+            /*// Refresh Current Chest Window
+            if (InventoryManagement.clientInServer) {
+                toggleChestWindow = true;
+                var clientOpenChest = GetCurrentOpenChest();
+                if (clientOpenChest == null || !ChestWindow.chests.chestWindowOpen) return;
+                ChestWindow.chests.closeChestInWindow();
+                // A Half Second delay to fix update
+                Thread.Sleep(500);
+                ChestWindow.chests.openChestInWindow(clientOpenChest.xPos, clientOpenChest.yPos);
+                toggleChestWindow = false;
+            }*/
+        }
+        
         internal static string getItemType(int itemID) {
             InventoryItem currentItem = Inventory.Instance.allItems[itemID];
             if (currentItem.spawnPlaceable) {
@@ -285,6 +329,18 @@ namespace TinyResort {
                 tempItem.sortID = checkSortOrder(Inventory.Instance.allItems[itemID].itemPrefab.name);
                 chestToSort.Add(tempItem);
             }
+        }
+
+        internal static Chest GetCurrentOpenChest() {
+            for (int i = 0; i < ContainerManager.manage.activeChests.Count; i++) {
+                if (NetworkMapSharer.Instance.localChar.myInteract.selectedTile.x
+                 == ContainerManager.manage.activeChests[i].xPos
+                 && NetworkMapSharer.Instance.localChar.myInteract.selectedTile.y
+                 == ContainerManager.manage.activeChests[i].yPos) {
+                    return ContainerManager.manage.activeChests[i];
+                }
+            }
+            return null;
         }
 
         internal static void ParseAllItems() {
